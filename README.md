@@ -34,7 +34,7 @@ Push main to deploy via the provisioned GitHub Actions pipeline. The platform SD
 
 See [runner/README.md](runner/README.md) for `pnpm runner` and `pnpm process-reading`.
 
-Automatic **remote PAGS dispatch is not yet connected**. This release supports a same-computer loopback companion or manual lesson JSON transfer to/from a remote PAGS runner. No PAGS instance, grant, engine setting or live agent was changed. Neither a cloud model nor a paid fallback is used by the companion.
+Automatic **remote PAGS dispatch is not yet connected**. This release supports a same-computer loopback companion with the reader run locally, or manual lesson JSON transfer to/from a PAGS runner. The hosted FAS content security policy blocks HTTP loopback calls, so the hosted reader uses the file workflow. No PAGS instance, grant, engine setting or live agent was changed. Neither a cloud model nor a paid fallback is used by the companion.
 
 FAS was selected because the reader is free and its storage/processing are local. PAS is not required to use a separately authorized PAGS runner. Hosted multi-device libraries or shared generated audio would be a reason to reconsider PAS.
 

@@ -5,7 +5,7 @@ This companion runs on the same computer as your PAGS runner. It calls an alread
 1. Clone this repo on the runner and run `pnpm install`.
 2. Start your installed Ollama service and choose a downloaded Mandarin-capable text model. `ollama list` shows exact model names.
 3. Set `CHINESE_MODEL` to that exact name (including its tag).
-4. Run `pnpm runner`. In Chinese Reader, open Local model → Check local connection. The browser and companion must be on the same computer; approve local-network access if your browser asks.
+4. Run `pnpm runner`. In another terminal, run `pnpm dev` and open `http://localhost:5173`. Open Local model → Check local connection. Both reader and companion must run on the same computer. The hosted FAS site blocks HTTP loopback connections through its content security policy; use the JSON export/import workflow there.
 5. Open a reading and click Add local-model translations. Text goes to the local model only. Cancellation preserves the original lesson. Save or export the result explicitly.
 
 Example (replace the model placeholder with a model you have actually installed):
