@@ -8,7 +8,7 @@ App: https://chinese-reader.freeappstore.online
 
 - Paste Chinese, import UTF-8 `.txt`, or import/export a processed lesson `.json` (12,000 source characters, 2 MB import limit).
 - Source-preserving dictionary segmentation in a Web Worker using CC-CEDICT. Contextual pinyin from pinyin-pro, checked against dictionary readings; simplified and traditional text remain unchanged.
-- Word practice with utterance-level highlighting, fluent sentence reading with actual browser word boundaries where available, speed control, repeat sentence, tap a word to pause, and resume from that word.
+- Word practice with utterance-level highlighting, fluent sentence reading with actual browser word boundaries where available, speed control, a saved 0–10 second pause after each word for repeating aloud (1.5 seconds by default, word mode only), repeat sentence, tap a word to pause, and resume from that word.
 - Selected-word meanings and real Hanzi Writer stroke animation / tracing. The mobile inspector opens above the reading when a word is tapped.
 - Browser-only lesson library and saved position. Sign-in does not sync readings. Export before clearing browser data.
 - A local Ollama companion and standalone CLI, suitable for running on the computer hosting a PAGS runner. It adds English sentence translations and contextual meanings; it does not let model output overwrite dictionary pinyin.

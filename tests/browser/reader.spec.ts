@@ -1,20 +1,59 @@
 import { expect, test } from '@playwright/test'
 
+declare global { interface Window { spokenWords: string[] } }
+
 test.beforeEach(async ({ page }) => {
   await page.route('https://api.freeappstore.online/**', r => r.fulfill({ json: {} }))
   await page.addInitScript(() => {
     // Speech lifecycle simulation only. Real dictionary, segmentation and stroke SVGs are used.
     let timer: ReturnType<typeof setTimeout>
+    window.spokenWords = []
     const voice = { name: 'Test Mandarin', voiceURI: 'test-zh', lang: 'zh-CN', localService: true, default: true }
     Object.defineProperty(window, 'SpeechSynthesisUtterance', { configurable: true, value: class { text: string; constructor(text: string) { this.text = text } } })
     Object.defineProperty(window, 'speechSynthesis', { configurable: true, value: {
       getVoices: () => [voice], addEventListener: () => {}, removeEventListener: () => {},
       cancel: () => clearTimeout(timer),
-      speak: (u: SpeechSynthesisUtterance) => { u.onstart?.({} as SpeechSynthesisEvent); timer = setTimeout(() => u.onend?.({} as SpeechSynthesisEvent), 300) },
+      speak: (u: SpeechSynthesisUtterance) => { window.spokenWords.push(u.text); u.onstart?.({} as SpeechSynthesisEvent); timer = setTimeout(() => u.onend?.({} as SpeechSynthesisEvent), 300) },
     } })
     localStorage.setItem('stores-theme', 'light')
   })
   await page.goto('/')
+})
+test('repeat-aloud delay starts after speech, cancels on pause, persists and excludes fluent reading', async ({ page }) => {
+  await page.getByRole('button', { name: 'Try the sample reading' }).click()
+  const delay = page.getByLabel('Pause after each word', { exact: true })
+  await delay.selectOption('2')
+  const now = new Date()
+  await page.clock.install({ time: now })
+  await page.clock.pauseAt(now)
+  await page.getByRole('button', { name: 'Play reading', exact: true }).click()
+  expect(await page.evaluate(() => window.spokenWords)).toEqual(['今天'])
+  await page.clock.runFor(300)
+  await expect(page.getByText('Your turn · repeat the highlighted word', { exact: true })).toBeVisible()
+  await page.clock.runFor(1900)
+  expect(await page.evaluate(() => window.spokenWords)).toEqual(['今天'])
+  await expect(page.getByLabel('Chinese passage').getByRole('button', { name: /^今天,/ })).toHaveAttribute('aria-pressed', 'true')
+  await page.clock.runFor(100)
+  expect(await page.evaluate(() => window.spokenWords)).toEqual(['今天', '下午'])
+  await page.clock.runFor(300)
+  await page.getByRole('button', { name: 'Pause reading', exact: true }).click()
+  await page.clock.runFor(5000)
+  expect(await page.evaluate(() => window.spokenWords)).toEqual(['今天', '下午'])
+  await page.getByRole('button', { name: 'Play reading', exact: true }).click()
+  expect(await page.evaluate(() => window.spokenWords)).toEqual(['今天', '下午', '下午'])
+  await delay.selectOption('0')
+  await page.getByRole('button', { name: 'Play reading', exact: true }).click()
+  await page.clock.runFor(300)
+  expect((await page.evaluate(() => window.spokenWords)).at(-1)).toBe('我')
+  await delay.selectOption('2')
+  await page.reload()
+  await page.getByRole('button', { name: 'Try the sample reading' }).click()
+  await expect(delay).toHaveValue('2')
+  await page.getByLabel('Reading style').selectOption('flow')
+  await expect(delay).toBeDisabled()
+  await page.getByRole('button', { name: 'Play reading', exact: true }).click()
+  await page.clock.runFor(300)
+  expect((await page.evaluate(() => window.spokenWords)).length).toBe(2)
 })
 test('sample playback, pause on word, real stroke animation, library and mobile layout', async ({ page }, info) => {
   await page.getByRole('button', { name: 'Try the sample reading' }).click()

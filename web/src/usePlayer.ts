@@ -7,6 +7,13 @@ export function usePlayer(lesson: Lesson | null) {
   const [index, setIndex] = useState(0)
   const [rate, setRate] = useState(0.85)
   const [mode, setMode] = useState<'word' | 'flow'>('word')
+  const [wordDelay, setWordDelay] = useState(() => {
+    try {
+      const saved = localStorage.getItem('chinese-reader-word-delay')
+      const value = saved === null ? 1.5 : Number(saved)
+      return Number.isFinite(value) && value >= 0 && value <= 10 ? value : 1.5
+    } catch { return 1.5 }
+  })
   const [repeat, setRepeat] = useState(false)
   const [preferLocal, setPreferLocal] = useState(false)
   const [voice, setVoice] = useState('')
@@ -95,6 +102,14 @@ export function usePlayer(lesson: Lesson | null) {
           })
         }
         if (run !== generation.current) break
+        if (mode === 'word' && wordDelay > 0) {
+          setPrecision('Your turn · repeat the highlighted word')
+          await new Promise<void>(resolve => {
+            const timer = setTimeout(resolve, wordDelay * 1000)
+            stopCurrent.current = () => { clearTimeout(timer); resolve() }
+          })
+          if (run !== generation.current) break
+        }
         cursor = mode === 'word' ? cursor + 1 : words.current.findIndex((w, i) => i > cursor && w.sentence > word.sentence)
         if (cursor < 0) cursor = words.current.length
         if (repeat && (cursor >= words.current.length || words.current[cursor].sentence > repeatSentence)) cursor = words.current.findIndex(w => w.sentence === repeatSentence)
@@ -103,10 +118,15 @@ export function usePlayer(lesson: Lesson | null) {
     } catch (e) {
       if (run === generation.current) { setNotice(e instanceof Error ? e.message : 'Playback failed.'); running.current = false; setPlaying(false) }
     }
-  }, [pause, move, rate, mode, repeat, voice, preferLocal])
+  }, [pause, move, rate, mode, repeat, voice, preferLocal, wordDelay])
   function seek(i: number) { pause(); move(i) }
   function toggle() { if (running.current) pause(); else void play() }
   function changeRate(v: number) { pause(); setRate(v) }
   function changeMode(v: 'word' | 'flow') { pause(); setMode(v) }
-  return { playing, index, rate, mode, repeat, voice, voices, notice, precision, preferLocal, setPreferLocal, setVoice, setRepeat, pause, play, seek, toggle, changeRate, changeMode }
+  function changeWordDelay(v: number) {
+    if (!Number.isFinite(v) || v < 0 || v > 10) return
+    pause(); setWordDelay(v)
+    try { localStorage.setItem('chinese-reader-word-delay', String(v)) } catch { /* Playback still works without saved preferences. */ }
+  }
+  return { playing, index, rate, mode, wordDelay, repeat, voice, voices, notice, precision, preferLocal, setPreferLocal, setVoice, setRepeat, pause, play, seek, toggle, changeRate, changeMode, changeWordDelay }
 }
