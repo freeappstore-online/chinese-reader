@@ -57,19 +57,19 @@
 
 :root {
   color-scheme: light;
-  --paper: #ffffff;
+  --paper: #faf9f4;
   --paper-deep: #f7f7f7;
-  --ink: #111111;
-  --muted: #666666;
+  --ink: #24382f;
+  --muted: #647068;
   --line: rgba(0, 0, 0, 0.08);
   --line-strong: rgba(0, 0, 0, 0.14);
   --panel: #ffffff;
   --panel-glass: rgba(255, 255, 255, 0.72);
   --panel-strong: rgba(255, 255, 255, 0.88);
   --panel-quiet: rgba(255, 255, 255, 0.6);
-  --accent: #d86f4d;
-  --accent-soft: #ffd4bf;
-  --accent-deep: #9f4427;
+  --accent: #287358;
+  --accent-soft: #e0efe5;
+  --accent-deep: #205b46;
   --sky: #4c97b5;
   --sky-soft: #c6e6f2;
   --sky-deep: #245b73;
@@ -120,9 +120,9 @@
   --panel-glass: rgba(18, 18, 18, 0.8);
   --panel-strong: rgba(18, 18, 18, 0.92);
   --panel-quiet: rgba(22, 22, 22, 0.8);
-  --accent: #ff9b76;
-  --accent-soft: #3b2119;
-  --accent-deep: #ffd9cb;
+  --accent: #7fd5aa;
+  --accent-soft: #17382c;
+  --accent-deep: #b5ebcd;
   --sky: #89cbe5;
   --sky-soft: #122632;
   --sky-deep: #d3f0fb;

@@ -1,0 +1,56 @@
+import { expect, test } from '@playwright/test'
+
+test.beforeEach(async ({ page }) => {
+  await page.route('https://api.freeappstore.online/**', r => r.fulfill({ json: {} }))
+  await page.addInitScript(() => {
+    // Speech lifecycle simulation only. Real dictionary, segmentation and stroke SVGs are used.
+    let timer: ReturnType<typeof setTimeout>
+    const voice = { name: 'Test Mandarin', voiceURI: 'test-zh', lang: 'zh-CN', localService: true, default: true }
+    Object.defineProperty(window, 'SpeechSynthesisUtterance', { configurable: true, value: class { text: string; constructor(text: string) { this.text = text } } })
+    Object.defineProperty(window, 'speechSynthesis', { configurable: true, value: {
+      getVoices: () => [voice], addEventListener: () => {}, removeEventListener: () => {},
+      cancel: () => clearTimeout(timer),
+      speak: (u: SpeechSynthesisUtterance) => { u.onstart?.({} as SpeechSynthesisEvent); timer = setTimeout(() => u.onend?.({} as SpeechSynthesisEvent), 300) },
+    } })
+    localStorage.setItem('stores-theme', 'light')
+  })
+  await page.goto('/')
+})
+test('sample playback, pause on word, real stroke animation, library and mobile layout', async ({ page }, info) => {
+  await page.getByRole('button', { name: 'Try the sample reading' }).click()
+  await expect(page.getByRole('heading', { name: 'An afternoon at the café' })).toBeVisible()
+  await expect(page.getByLabel('Chinese passage').getByText('This afternoon, I want to go to a nearby café.', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Play reading', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Pause reading', exact: true })).toBeVisible()
+  await page.getByLabel('Chinese passage').getByRole('button', { name: /^下午,/ }).click()
+  await expect(page.getByRole('button', { name: 'Play reading', exact: true })).toBeVisible()
+  await expect(page.getByLabel('Selected word').locator('p[lang="zh-CN"]').filter({ hasText: '下午' })).toBeVisible()
+  const panel = page.getByLabel('Selected word')
+  await expect(panel.locator('svg path').first()).toBeAttached()
+  await panel.getByRole('button', { name: 'Animate strokes' }).click()
+  await expect(panel.locator('svg path').first()).toBeAttached()
+  if (info.project.name === 'mobile') await page.getByRole('button', { name: 'Back to passage' }).click()
+  await page.getByRole('button', { name: 'Save reading', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Save changes' })).toBeVisible()
+  await page.screenshot({ path: `artifacts/${info.project.name}-reader.png`, fullPage: true })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  await page.goto('/library')
+  await expect(page.getByRole('heading', { name: 'An afternoon at the café' })).toBeVisible()
+  await page.getByRole('button', { name: 'Continue', exact: true }).click()
+  await expect(page.getByLabel('Selected word').locator('p[lang="zh-CN"]').filter({ hasText: '下午' })).toBeVisible()
+})
+test('custom UTF-8 text, honest model failure, export and invalid import', async ({ page }) => {
+  await page.getByLabel('Reading title').fill('A trip to the bank')
+  await page.getByLabel('Your Chinese text', { exact: true }).fill('我今天去银行。')
+  await page.getByRole('button', { name: 'Open my reading' }).click()
+  await expect(page.getByLabel('Chinese passage').getByRole('button', { name: /^银行, yín háng,/ })).toBeVisible()
+  await page.route('http://127.0.0.1:18791/**', r => r.abort())
+  await page.getByRole('button', { name: 'Add local-model translations' }).click()
+  await expect(page.getByRole('alert')).toBeVisible()
+  const download = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Export lesson' }).click()
+  expect((await download).suggestedFilename()).toBe('A trip to the bank.json')
+  await page.getByRole('button', { name: 'New text', exact: true }).click()
+  await page.locator('input[type=file]').setInputFiles({ name: 'bad.json', mimeType: 'application/json', buffer: Buffer.from('{"version":1}') })
+  await expect(page.getByRole('alert')).toContainText('supported Chinese Reader lesson')
+})

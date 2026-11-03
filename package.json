@@ -18,7 +18,15 @@
     "dev": "pnpm --filter @chinese-reader/web dev",
     "build": "pnpm --filter @chinese-reader/web build",
     "preview": "pnpm --filter @chinese-reader/web preview",
-    "typecheck": "pnpm --filter @chinese-reader/web exec tsc -b",
-    "test": "pnpm build && node --test scripts/styling.test.mjs"
+    "typecheck": "pnpm --filter @chinese-reader/web exec tsc -b && pnpm --filter @chinese-reader/web exec tsc -p ../tsconfig.runner.json",
+    "test": "pnpm build && node --test scripts/styling.test.mjs && node --import tsx --test tests/*.test.ts",
+    "test:browser": "playwright test",
+    "runner": "node --import tsx runner/server.ts",
+    "process-reading": "node --import tsx runner/cli.ts"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.1",
+    "@types/node": "^26.6.6",
+    "tsx": "^4.23.15"
   }
 }

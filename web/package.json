@@ -10,6 +10,8 @@
   },
   "dependencies": {
     "@freeappstore/sdk": "^0.16.4",
+    "hanzi-writer": "3.7.3",
+    "pinyin-pro": "3.27.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5"
   },

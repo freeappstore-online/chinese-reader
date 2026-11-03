@@ -1,0 +1,95 @@
+import { pinyin } from 'pinyin-pro'
+
+export type Word = { text: string; pinyin: string; meaning: string; start: number; end: number }
+export type Sentence = { text: string; translation: string; words: Word[] }
+export type Lesson = { version: 1; id: string; title: string; text: string; sentences: Sentence[]; createdAt: number; position: number; source: 'dictionary' | 'model' | 'sample' }
+export type Entry = { pinyin: string; meaning: string }
+export type Dictionary = Map<string, Entry[]>
+export const MAX_TEXT = 12000
+export function toneMarks(input: string) {
+  return input.replace(/([a-zü:]+)([0-5])/gi, (_, raw: string, digit: string) => {
+    const syllable = raw.toLowerCase().replace(/u:|v/g, 'ü'), tone = Number(digit)
+    if (tone === 0 || tone === 5) return syllable
+    let at = syllable.indexOf('a')
+    if (at < 0) at = syllable.indexOf('e')
+    if (at < 0 && syllable.includes('ou')) at = syllable.indexOf('o')
+    if (at < 0) at = Math.max(...['i', 'o', 'u', 'ü'].map(v => syllable.lastIndexOf(v)))
+    const tones: Record<string, string> = { a: 'āáǎà', e: 'ēéěè', i: 'īíǐì', o: 'ōóǒò', u: 'ūúǔù', ü: 'ǖǘǚǜ' }
+    if (at < 0) return syllable.replace(/[mn]/, c => (c + ['', '\u0304', '\u0301', '\u030c', '\u0300'][tone]).normalize('NFC'))
+    return syllable.slice(0, at) + tones[syllable[at]][tone - 1] + syllable.slice(at + 1)
+  })
+}
+export const SAMPLE = '今天下午，我想去附近的咖啡馆。\n我带了一本中文书，坐在窗边慢慢地读。\n遇到不认识的词，我就停下来，看一看它的意思。\n每天练习一点，中文就会越来越好。'
+const SAMPLE_TRANSLATIONS = ['This afternoon, I want to go to a nearby café.', 'I brought a Chinese book and sat by the window, reading slowly.', 'When I come across an unfamiliar word, I stop and look at its meaning.', 'With a little practice every day, my Chinese will get better and better.']
+export function parseDictionary(text: string): Dictionary {
+  const dict: Dictionary = new Map()
+  for (const line of text.split('\n')) {
+    const m = line.trim().match(/^(\S+) (\S+) \[([^\]]+)\] \/(.+)\/$/)
+    if (!m) continue
+    const entry = { pinyin: m[3], meaning: m[4].split('/').filter(s => !/^(variant of|old variant|CL:)/.test(s)).join('; ') || m[4] }
+    for (const key of new Set([m[1], m[2]])) dict.set(key, [...(dict.get(key) || []), entry])
+  }
+  return dict
+}
+export function splitText(text: string): string[] {
+  return text.match(/[^。！？!?\n]+[。！？!?]*|[。！？!?]+/gu)?.map(s => s.trim()).filter(Boolean) || []
+}
+export function makeLesson(text: string, title: string, dict: Dictionary): Lesson {
+  text = text.trim()
+  if (!text || text.length > MAX_TEXT) throw new Error(`Enter between 1 and ${MAX_TEXT.toLocaleString()} characters.`)
+  if (!/\p{Script=Han}/u.test(text)) throw new Error('Add some Chinese text to read.')
+  const sentences = splitText(text).map(sentence => {
+    const contextual = pinyin(sentence, { type: 'all' })
+    const words: Word[] = []
+    // Longest dictionary match preserves source characters, punctuation and offsets.
+    let start = 0
+    while (start < sentence.length) {
+      const tail = sentence.slice(start)
+      const nonHan = tail.match(/^[^\p{Script=Han}]+/u)
+      let chunk = nonHan?.[0] || String.fromCodePoint(sentence.codePointAt(start)!)
+      if (!nonHan) for (let len = Math.min(12, tail.length); len > chunk.length; len--) {
+        if (dict.has(tail.slice(0, len))) { chunk = tail.slice(0, len); break }
+      }
+      const entries = dict.get(chunk)
+      const charStart = [...sentence.slice(0, start)].length
+      let pronunciation = /\p{Script=Han}/u.test(chunk) ? contextual.slice(charStart, charStart + [...chunk].length).map(c => c.pinyin).join(' ') : ''
+      const ranked = entries?.slice().sort((a, b) => Number(/^(surname |Taiwan pr\.|old variant|variant of|abbr\.)/i.test(a.meaning)) - Number(/^(surname |Taiwan pr\.|old variant|variant of|abbr\.)/i.test(b.meaning)))
+      const matching = ranked?.find(e => toneMarks(e.pinyin).toLowerCase() === pronunciation.toLowerCase())
+      const useful = matching || ranked?.[0]
+      // Traditional phrases can be absent from the pinyin library; the exact dictionary entry is authoritative.
+      if (useful && !matching) pronunciation = toneMarks(useful.pinyin)
+      words.push({ text: chunk, pinyin: pronunciation, meaning: useful?.meaning || '', start, end: start + chunk.length })
+      start += chunk.length
+    }
+    return { text: sentence, translation: '', words }
+  })
+  const sample = text === SAMPLE
+  if (sample) sentences.forEach((s, i) => { s.translation = SAMPLE_TRANSLATIONS[i] || '' })
+  return { version: 1, id: crypto.randomUUID(), title: title.trim().slice(0, 100) || 'Untitled reading', text, sentences, createdAt: Date.now(), position: 0, source: sample ? 'sample' : 'dictionary' }
+}
+export function validateLesson(value: unknown): Lesson {
+  if (!value || typeof value !== 'object') throw new Error('Invalid lesson file.')
+  const v = value as Lesson
+  if (v.version !== 1 || typeof v.title !== 'string' || v.title.length > 100 || typeof v.text !== 'string' || v.text.length > MAX_TEXT || !Array.isArray(v.sentences) || v.sentences.length > MAX_TEXT) throw new Error('This is not a supported Chinese Reader lesson.')
+  const texts = splitText(v.text)
+  if (texts.length !== v.sentences.length) throw new Error('Lesson sentences do not match the original text.')
+  for (const [i, s] of v.sentences.entries()) {
+    if (s.text !== texts[i] || typeof s.translation !== 'string' || s.translation.length > 8000 || !Array.isArray(s.words) || s.words.map(w => w.text).join('') !== s.text) throw new Error('Lesson annotations do not match the original text.')
+    let offset = 0
+    for (const w of s.words) {
+      if (typeof w.text !== 'string' || !w.text || w.start !== offset || w.end !== offset + w.text.length || typeof w.pinyin !== 'string' || w.pinyin.length > 500 || typeof w.meaning !== 'string' || w.meaning.length > 4000) throw new Error('Invalid word annotation.')
+      if (/\p{Script=Han}/u.test(w.pinyin)) throw new Error('Pinyin must contain pronunciation, not Chinese characters.')
+      offset = w.end
+    }
+  }
+  const count = v.sentences.flatMap(s => s.words).length
+  return { ...v, id: typeof v.id === 'string' ? v.id : crypto.randomUUID(), source: ['dictionary', 'sample', 'model'].includes(v.source) ? v.source : 'dictionary', createdAt: Number.isFinite(v.createdAt) ? v.createdAt : Date.now(), position: Number.isInteger(v.position) && v.position >= 0 && v.position < count ? v.position : 0 }
+}
+export function flatten(lesson: Lesson) {
+  return lesson.sentences.flatMap((s, sentence) => s.words.map((word, local) => ({ ...word, sentence, local })))
+}
+export function download(name: string, data: unknown) {
+  const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }))
+  const a = document.createElement('a'); a.href = url; a.download = name; a.click()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}

@@ -1,54 +1,55 @@
-# template-standalone
+# Chinese Reader
 
-The standalone-app template used by [`fas init`](https://github.com/freeappstore-online/platform/tree/main/packages/cli) to scaffold new free apps for [FreeAppStore](https://freeappstore.online).
+Read your own Chinese text with pinyin, English word meanings, sentence translations, audio and stroke order together.
 
-You almost certainly want to use the CLI, not clone this directly:
+App: https://chinese-reader.freeappstore.online
 
-```bash
-npm i -g @freeappstore/cli
-fas init my-app
+## First version
+
+- Paste Chinese, import UTF-8 `.txt`, or import/export a processed lesson `.json` (12,000 source characters, 2 MB import limit).
+- Source-preserving dictionary segmentation in a Web Worker using CC-CEDICT. Contextual pinyin from pinyin-pro, checked against dictionary readings; simplified and traditional text remain unchanged.
+- Word practice with utterance-level highlighting, fluent sentence reading with actual browser word boundaries where available, speed control, repeat sentence, tap a word to pause, and resume from that word.
+- Selected-word meanings and real Hanzi Writer stroke animation / tracing. The mobile inspector opens above the reading when a word is tapped.
+- Browser-only lesson library and saved position. Sign-in does not sync readings. Export before clearing browser data.
+- A local Ollama companion and standalone CLI, suitable for running on the computer hosting a PAGS runner. It adds English sentence translations and contextual meanings; it does not let model output overwrite dictionary pinyin.
+- Optional already-configured local TTS service with browser-speech fallback.
+
+The sample's sentence translations are authored content. Other sentence translations require the local model or an imported processed lesson. Dictionary definitions alone are not presented as fluent sentence translations.
+
+## Development
+
+Node 22+, pnpm 10. `pnpm install && pnpm dev`.
+
+```sh
+pnpm typecheck
+pnpm test
+pnpm exec playwright install chromium
+pnpm test:browser
+pnpm dlx @freeappstore/cli@latest check
 ```
 
-The CLI clones this template, replaces every `chinese-reader` placeholder with your app id, runs `git init`, and makes the first commit — the result is a runnable app you can `pnpm dev` immediately.
+Push main to deploy via the provisioned GitHub Actions pipeline. The platform SDK Shell owns navigation, theme and account UI. No analytics loader; background SDK diagnostic uploads are disabled.
 
-## What's in here
+## Local model and PAGS
 
-- `web/` — Vite + React + TypeScript + Tailwind 4 app, ESM-only.
-- `web/src/App.tsx` — the app wrapped in the SDK's `Shell` (`@freeappstore/sdk/ui`) with two starter screens, Home (`/`) and About (`/about`), declared in its `nav` prop. A new app renders the standard topbar, its navigation (`<nav aria-label="Main">`), an error boundary, toasts and an offline banner from the first render. No sign-in required.
-- `web/src/index.css` — brand fonts (Manrope + Fraunces) and the design tokens (`--paper`, `--ink`, `--accent`, …); dark mode via `:root[data-theme='dark']`, which the SDK sets from the system or the Shell's theme toggle.
-- `web/src/main.tsx` — React entry point.
-- `web/index.html` — links Manrope + Fraunces, sets PWA meta tags, references the manifest.
-- `web/public/manifest.json` — PWA manifest with `name`, `display`, `start_url`.
-- `package.json` — pnpm workspace, `dev` / `build` / `typecheck` / `test` scripts.
-- `.github/workflows/compliance.yml` — runs the same checks as `fas check` on every PR. Source of truth lives in the [`@freeappstore/compliance`](https://www.npmjs.com/package/@freeappstore/compliance) package.
+See [runner/README.md](runner/README.md) for `pnpm runner` and `pnpm process-reading`.
 
-## Cloning manually (not recommended)
+Automatic **remote PAGS dispatch is not yet connected**. This release supports a same-computer loopback companion or manual lesson JSON transfer to/from a remote PAGS runner. No PAGS instance, grant, engine setting or live agent was changed. Neither a cloud model nor a paid fallback is used by the companion.
 
-If you really want to scaffold by hand:
+FAS was selected because the reader is free and its storage/processing are local. PAS is not required to use a separately authorized PAGS runner. Hosted multi-device libraries or shared generated audio would be a reason to reconsider PAS.
 
-```bash
-git clone https://github.com/freeappstore-online/template-standalone my-app
-cd my-app
-# Replace chinese-reader → my-app in package.json, web/index.html, web/src/App.tsx, README, etc.
-rm -rf .git && git init
-pnpm install && pnpm dev
-```
+## Playback accuracy and limits
 
-Then run `fas publish` to provision repo + hosting + DNS, or open the [submission form](https://github.com/freeappstore-online/submissions/issues/new) for maintainer review.
+Word mode speaks individual words, with gaps; it is a pronunciation drill. Fluent browser speech uses boundary callbacks. A voice that supplies no word positions produces sentence-level highlighting. Fluent local TTS has sentence-level highlighting until a timed alignment provider is added. No estimated timing is labeled exact. Pause restarts the selected word/remaining phrase; it is not sample-accurate audio pause. A Mandarin browser voice must be installed. Network voices can send text to the OS/browser speech provider.
 
-## License
+Automatic segmentation and pinyin can still be wrong for names, idioms or polyphonic contexts. Model translation is not certified. The old Kokoro and Qwen isolated-character experiments in Hanzi Practice were not reused as validated narration.
 
-MIT.
+## Offline and licenses
 
-## Mobile viewport defaults
+After the production service worker has installed, the app, dictionary and 400 common stroke datasets are cached for offline use. Additional stroke data loads on demand from the pinned `hanzi-writer-data@2.0.1` public CDN and may need connectivity. Browser voice availability offline depends on the device. The local model must already be installed; the app never downloads a model automatically.
 
-The app starts at device width with page zoom restricted by the viewport meta tag
-and `touch-action: pan-x pan-y` in `web/src/index.css`. The root clips horizontal
-page overflow; vertical scrolling and explicit inner scrollers remain available.
-Keep layouts responsive at 320px and put wide tables/carousels in their own scroll
-containers. Maps and game canvases can handle their own gestures.
+App code: MIT. Dictionary: unchanged 2026-11-02 CC-CEDICT snapshot from MDBG (125,356 entries), CC BY-SA 4.0; [notice](web/public/dictionary/NOTICE.txt). Stroke data: Make Me a Hanzi / Arphic Public License; [license](web/public/licenses/ARPHICPL.txt). Hanzi Writer and pinyin-pro: MIT. Data licenses remain separate from the application code.
 
-These defaults also apply when launched from the home screen. Browser or accessibility
-settings can override zoom restrictions. For an app that needs browser pinch zoom,
-remove `maximum-scale` and `user-scalable` from `web/index.html` and change the root
-`touch-action` rules to `manipulation`. Keep the app's text-size controls available.
+## Validation scope
+
+Tests exercise actual dictionary data, traditional/polyphonic readings, source offsets, corrupted imports, model-result rejection, cancellation and loopback boundary enforcement. Desktop/mobile Chromium workflows use synthetic speech events, real dictionary processing and real stroke SVGs. A real installed Ollama model was also probed separately; pronunciation output was unsuitable, which led to keeping dictionary pinyin authoritative. Physical iPhone/Android playback and pronunciation review remain pending. Synthetic speech tests are not evidence of real device audio quality.

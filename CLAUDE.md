@@ -1,80 +1,17 @@
-# chinese-reader
+# Chinese Reader
 
-A free app on FreeAppStore.
+Free Chinese text reader at https://chinese-reader.freeappstore.online.
 
-- Subdomain: `chinese-reader.freeappstore.online`
-- Dev: `pnpm install && pnpm dev`
-- Build: `pnpm build`
-- Deploy: `git push origin main` (auto-deploys to R2 via GitHub Actions)
-
-Free, MIT-licensed, no tracking. For platform conventions, read
-https://freeappstore.online/skills.md
-before writing or changing anything.
-
-## App shell
-
-`web/src/App.tsx` wraps the app in `<Shell app={fas} appName="chinese-reader" nav={NAV} onNavigate={navigate}>`
-from `@freeappstore/sdk/ui`. Keep it as the root and build every screen inside it:
-
-- Add one `NAV` entry per screen (`{ label, href, title }`) and render the screen for `path` in `App`.
-  The Shell turns `NAV` into the app's navigation (`<nav aria-label="Main">`).
-- Start each screen with `<PageHeader title="…" />`. Use `useToast()` for feedback.
-- Don't build your own header, sidebar, tab bar, bottom dock or error boundary; the Shell has them.
-- This template doesn't require sign-in. Pass `requireAuth` only if the whole app needs an account.
-
-Guide: https://docs.freeappstore.online/getting-started/#build-your-app-on-the-shell
-
-## SDK
-
-This app uses `@freeappstore/sdk` (v0.16.0+). Available modules:
-
-- `fas.auth` — OAuth sign-in (SSO across all apps). **Always offer both GitHub and Google sign-in.**
-- `fas.kv` — per-user storage (1MB, 100 keys)
-- `fas.collections` — Firestore-style document database
-- `fas.counters` — atomic shared counters
-- `fas.rooms` — real-time WebSocket rooms (32 peers)
-- `fas.proxy` — secret-injecting API proxy
-- `fas.keys` — user API key vault (OpenAI, Anthropic, etc.)
-- `fas.email` — transactional email (100/day)
-- `fas.log` — logging (auto-captures errors, uploads to server)
-- `fas.webhooks` — outbound webhook management
-- `fas.roles` — app-level RBAC
-- `fas.friends` — platform-level friend relationships (shared across all apps)
-- `fas.voice` — speech-to-text via `useVoiceInput` hook (React only)
-
-UI components: `import { Shell, PageHeader, useToast, Modal, Card, Tabs, Badge, ... } from '@freeappstore/sdk/ui'`
-Hooks: `import { useAuth, useTheme, useFriends, useVoiceInput } from '@freeappstore/sdk/hooks'`
-
-## Config & secrets
-
-- Never commit `.env.production` (compliance check fails).
-- Public identifiers (OAuth client IDs, Firebase config): set as GitHub repo Variables (`VITE_*` prefix).
-- API keys that cost money: use `fas.proxy.fetch()` (app-secret proxy or user key vault).
-- Local dev: use `.env.local` (gitignored).
-- See "App Config & Secrets" in SKILLS.md for the full guide.
-
-## MCP (for AI agents)
-
-Connect to the FreeAppStore MCP server for SDK docs, deploy status, and log queries:
-
-```json
-{
-  "mcpServers": {
-    "freeappstore": {
-      "command": "npx",
-      "args": ["mcp-remote", "https://mcp.freeappstore.online/mcp"]
-    }
-  }
-}
-```
-
-Tools: `create_app`, `update_files`, `read_file`, `list_files`, `agent_build`, `agent_status`, `list_apps`, `app_info`, `deploy_status`, `app_logs`, `platform_guide`, `sdk_reference`.
-
-## Styling
-
-Reuse SDK or local React components for repeated patterns.
-Use Tailwind 4 token utilities (`bg-paper bg-panel text-ink border-line bg-popover`) for layout and one-offs.
-Keep tokens, `@theme`, `@source` and base rules in `web/src/index.css`; no feature CSS classes.
-Inline styles are only for commented dynamic values; never inject CSS at runtime.
-Floating surfaces use opaque `--popover`; glass uses `--panel-glass` with backdrop blur.
-See [SDK styling](https://github.com/freeappstore-online/platform/blob/main/docs/ui.md#styling).
+- Dev: `pnpm install && pnpm dev`.
+- Validate: `pnpm typecheck`, `pnpm test`, `pnpm test:browser`, `fas check`.
+- Work on main; push main to deploy through existing GitHub Actions.
+- Platform SKILLS.md: https://freeappstore.online/skills.md.
+- Compatibility pointer: https://raw.githubusercontent.com/freeappstore-online/freeappstore/main/SKILLS.md
+- Keep the SDK Shell, its navigation and PageHeader.
+- Reader source is `web/src`; runner companion is `runner/`.
+- Dictionary and stroke data licenses are separate from MIT; preserve notices.
+- Model processing must preserve source text, token ordering and offsets. Never turn guessed timings into claimed word alignment or substitute cloud AI silently.
+- Model output supplies meanings and translation; dictionary pinyin stays authoritative.
+- `runner/server.ts` is loopback-only, with exact Host/Origin checks and a single active request. Do not expose it on the Internet or make a permissive proxy.
+- No personal lesson files in git. Do not change another PAGS agent or configure a remote grant as part of ordinary app work.
+- Distinguish same-computer companion, manual remote CLI transfer and future automatic PAGS dispatch. The latter is not shipped.
