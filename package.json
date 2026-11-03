@@ -1,0 +1,24 @@
+{
+  "name": "chinese-reader",
+  "private": true,
+  "packageManager": "pnpm@10.30.3",
+  "engines": {
+    "node": ">=22"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/freeappstore-online/chinese-reader.git"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @chinese-reader/web dev",
+    "build": "pnpm --filter @chinese-reader/web build",
+    "preview": "pnpm --filter @chinese-reader/web preview",
+    "typecheck": "pnpm --filter @chinese-reader/web exec tsc -b",
+    "test": "pnpm build && node --test scripts/styling.test.mjs"
+  }
+}
