@@ -1,3 +1,5 @@
+import { toneNumber } from './pronunciation'
+export { toneNumber } from './pronunciation'
 // Pitch contours adapted from our MIT-licensed Hanzi Practice app (tones.ts).
 const TONES = {
   1: { path: 'M6 11 H34', label: 'high and level' },
@@ -6,11 +8,6 @@ const TONES = {
   4: { path: 'M6 6 C15 13 25 26 34 34', label: 'falling' },
   5: { path: '', label: 'neutral' },
 } as const
-export function toneNumber(syllable: string): keyof typeof TONES {
-  const marks: Record<string, keyof typeof TONES> = { '\u0304': 1, '\u0301': 2, '\u030c': 3, '\u0300': 4 }
-  const mark = [...syllable.normalize('NFD')].find(c => marks[c])
-  return mark ? marks[mark] : 5
-}
 export function ToneGuide({ pinyin }: { pinyin: string }) {
   const tones = pinyin.trim().split(/[\s'’]+/).filter(Boolean).map(toneNumber)
   if (!tones.length) return null

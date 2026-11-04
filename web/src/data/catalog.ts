@@ -1,3 +1,5 @@
+import { LIBRARY_MEANINGS } from './readingCues'
+import { readingGloss } from '../gloss'
 import { makeLesson, type Dictionary, type Lesson } from '../core'
 import { BEGINNER_TEXTS } from './beginner'
 import { phraseOffsets } from '../practice'
@@ -77,7 +79,15 @@ export function makeCatalogLesson(entry: CatalogEntry, dictionary: Dictionary): 
       if (phrases.text !== text) throw new Error('Phrase marks must preserve the original text.')
       sentence.pauseAfter = phrases.offsets
     }
-    sentence.words.forEach(word => { if (entry.glosses?.[word.text]) word.meaning = entry.glosses[word.text] })
+    sentence.words.forEach(word => {
+      const contextual = LIBRARY_MEANINGS[entry.id]?.[word.text]
+      if (contextual) { word.meaning = contextual; word.gloss = contextual.split(';')[0] }
+      else if (entry.glosses?.[word.text]) word.meaning = entry.glosses[word.text]
+      if (!word.gloss) {
+        const cue = readingGloss(word, sentence.translation)
+        if (cue !== '—') word.gloss = cue
+      }
+    })
     if (pronunciation) {
       const syllables = pronunciation.split(' ')
       if ([...text].filter(c => /\p{Script=Han}/u.test(c)).length !== syllables.length) throw new Error('Library pronunciation does not match its characters.')
@@ -92,3 +102,15 @@ export function makeCatalogLesson(entry: CatalogEntry, dictionary: Dictionary): 
   return { ...lesson, id: `catalog-${entry.id}`, catalogId: entry.id, level: entry.level, tags: [...entry.tags], source: 'library' }
 }
 export function catalogFor(lesson: Lesson) { return CATALOG.find(e => e.id === lesson.catalogId && catalogText(e) === lesson.text) }
+
+/** Upgrade included readings saved before compact contextual cues were added. */
+export function refreshCatalogCues(lesson: Lesson): Lesson {
+  const entry = catalogFor(lesson)
+  if (!entry || lesson.source === 'model') return lesson
+  return { ...lesson, sentences: lesson.sentences.map(sentence => ({ ...sentence, words: sentence.words.map(word => {
+    const contextual = LIBRARY_MEANINGS[entry.id]?.[word.text]
+    if (contextual) return { ...word, meaning: contextual, gloss: contextual.split(';')[0] }
+    const gloss = readingGloss(word, sentence.translation)
+    return gloss === '—' ? word : { ...word, gloss }
+  }) })) }
+}

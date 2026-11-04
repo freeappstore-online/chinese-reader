@@ -19,6 +19,7 @@ export function useReadingSettings() {
   const [showPinyin, setShowPinyin] = usePreference('chinese-reader.show-pinyin', true, isBoolean)
   const [showMeanings, setShowMeanings] = usePreference('chinese-reader.show-meanings', true, isBoolean)
   const [follow, setFollow] = usePreference('chinese-reader.follow', true, isBoolean)
+  const [spokenTones, setSpokenTones] = usePreference('chinese-reader.spoken-tones', true, isBoolean)
   const [showTones, setShowTones] = usePreference('chinese-reader.show-tones', false, isBoolean)
   const [showPauses, setShowPauses] = usePreference('chinese-reader.show-pauses', true, isBoolean)
   const [translationPosition, setTranslationPosition] = usePreference<'above' | 'below'>('chinese-reader.translation-position', 'above', (v): v is 'above' | 'below' => v === 'above' || v === 'below')
@@ -31,6 +32,6 @@ export function useReadingSettings() {
     const color = part === 'zi' ? 'text-ink' : part === 'pinyin' ? 'text-sky-deep' : 'text-reading-translation'
     return `max-w-full break-words leading-relaxed ${font} ${SIZE_CLASSES[setting.size === 'match' ? size : setting.size]} ${color}`
   }
-  return { showPinyin, setShowPinyin, showMeanings, setShowMeanings, follow, setFollow, showTones, setShowTones, showPauses, setShowPauses, translationPosition, setTranslationPosition, size, setSize, parts, classFor }
+  return { spokenTones, setSpokenTones, showPinyin, setShowPinyin, showMeanings, setShowMeanings, follow, setFollow, showTones, setShowTones, showPauses, setShowPauses, translationPosition, setTranslationPosition, size, setSize, parts, classFor }
 }
 export type ReadingSettings = ReturnType<typeof useReadingSettings>

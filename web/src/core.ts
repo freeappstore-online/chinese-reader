@@ -1,6 +1,7 @@
 import { pinyin } from 'pinyin-pro'
+import { isReadingGloss } from './gloss'
 
-export type Word = { text: string; pinyin: string; meaning: string; start: number; end: number }
+export type Word = { text: string; pinyin: string; meaning: string; gloss?: string; start: number; end: number }
 export type Sentence = { text: string; translation: string; words: Word[]; pauseAfter?: number[] }
 export type Lesson = { version: 1; id: string; title: string; text: string; sentences: Sentence[]; createdAt: number; position: number; source: 'dictionary' | 'model' | 'sample' | 'library'; catalogId?: string; tags?: string[]; level?: 'beginner' | 'intermediate' | 'advanced' }
 export type Entry = { pinyin: string; meaning: string }
@@ -34,6 +35,7 @@ export function parseDictionary(text: string): Dictionary {
 export function splitText(text: string): string[] {
   return text.match(/[^。！？!?\n]+[。！？!?]*|[。！？!?]+/gu)?.map(s => s.trim()).filter(Boolean) || []
 }
+const entryPenalty = (entry: Entry) => Number(/[A-Z]/.test(entry.pinyin)) * 2 + Number(/^(surname |Taiwan pr\.|old variant|variant of|abbr\.|used in |see )/i.test(entry.meaning)) * 3
 export function makeLesson(text: string, title: string, dict: Dictionary, phraseBoundaries: number[][] = []): Lesson {
   text = text.trim()
   if (!text || text.length > MAX_TEXT) throw new Error(`Enter between 1 and ${MAX_TEXT.toLocaleString()} characters.`)
@@ -58,7 +60,7 @@ export function makeLesson(text: string, title: string, dict: Dictionary, phrase
       const entries = dict.get(chunk)
       const charStart = [...sentence.slice(0, start)].length
       let pronunciation = /\p{Script=Han}/u.test(chunk) ? contextual.slice(charStart, charStart + [...chunk].length).map(c => c.pinyin).join(' ') : ''
-      const ranked = entries?.slice().sort((a, b) => Number(/^(surname |Taiwan pr\.|old variant|variant of|abbr\.|used in )/i.test(a.meaning)) - Number(/^(surname |Taiwan pr\.|old variant|variant of|abbr\.|used in )/i.test(b.meaning)))
+      const ranked = entries?.slice().sort((a, b) => entryPenalty(a) - entryPenalty(b))
       const matching = ranked?.find(e => toneMarks(e.pinyin).toLowerCase() === pronunciation.toLowerCase())
       const useful = matching || ranked?.[0]
       // Traditional phrases can be absent from the pinyin library; the exact dictionary entry is authoritative.
@@ -83,6 +85,7 @@ export function validateLesson(value: unknown): Lesson {
     let offset = 0
     for (const w of s.words) {
       if (typeof w.text !== 'string' || !w.text || w.start !== offset || w.end !== offset + w.text.length || typeof w.pinyin !== 'string' || w.pinyin.length > 500 || typeof w.meaning !== 'string' || w.meaning.length > 4000) throw new Error('Invalid word annotation.')
+      if (w.gloss !== undefined && !isReadingGloss(w.gloss)) throw new Error('A reading gloss must be one English word (up to 32 letters).')
       if (/\p{Script=Han}/u.test(w.pinyin)) throw new Error('Pinyin must contain pronunciation, not Chinese characters.')
       offset = w.end
     }

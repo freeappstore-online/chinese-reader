@@ -8,14 +8,14 @@ import { makeLesson } from '../web/src/core.ts'
 
 test('local model preserves source and rejects malformed or changed annotations', async () => {
   const previous = { url: process.env.CHINESE_OLLAMA_URL, model: process.env.CHINESE_MODEL }
-  let corrupt = false
+  let corrupt = false, longGloss = false
   const model = createServer(async (req, res) => {
     let body = ''; for await (const chunk of req) body += chunk
     const prompt = JSON.parse(body)
     assert.equal(prompt.stream, false)
     const material = JSON.parse(prompt.messages[1].content)
     res.setHeader('Content-Type', 'application/json')
-    res.end(JSON.stringify({ done: true, message: { content: JSON.stringify({ translation: 'Hello.', words: material.words.map((text: string) => ({ text: corrupt ? '替换' : text, pinyin: text === '。' ? '' : 'nǐ', meaning: text === '。' ? '' : 'hello' })) }) } }))
+    res.end(JSON.stringify({ done: true, message: { content: JSON.stringify({ translation: 'Hello.', words: material.words.map((text: string) => ({ text: corrupt ? '替换' : text, pinyin: text === '。' ? '' : 'nǐ', meaning: 'a greeting used when meeting someone', gloss: longGloss ? 'a greeting' : 'hello' })) }) } }))
   }).listen(0, '127.0.0.1')
   await once(model, 'listening')
   process.env.CHINESE_OLLAMA_URL = `http://127.0.0.1:${(model.address() as { port: number }).port}`
@@ -26,6 +26,11 @@ test('local model preserves source and rejects malformed or changed annotations'
     assert.equal(output.text, input.text); assert.equal(output.id, input.id)
     assert.equal(output.source, 'model'); assert.equal(output.sentences[0].translation, 'Hello.')
     assert.deepEqual(output.sentences[0].words.map(w => w.pinyin), input.sentences[0].words.map(w => w.pinyin))
+    assert.equal(output.sentences[0].words[0].gloss, 'hello')
+    assert.equal(output.sentences[0].words[0].meaning, 'a greeting used when meeting someone')
+    longGloss = true
+    await assert.rejects(analyze(input, new AbortController().signal), /one English word/)
+    longGloss = false
     corrupt = true
     await assert.rejects(analyze(input, new AbortController().signal), /changed or omitted/)
     const controller = new AbortController(); controller.abort()

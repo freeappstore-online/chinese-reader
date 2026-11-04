@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState, type ButtonHTMLAttributes } from 'react'
+import { useMemo, useEffect, useRef, useState, type ButtonHTMLAttributes } from 'react'
 import { initApp } from '@freeappstore/sdk'
 import { Badge, Card, PageHeader, Shell, type NavItem } from '@freeappstore/sdk/ui'
 import { download, flatten, MAX_TEXT, SAMPLE, validateLesson, type Lesson } from './core'
@@ -8,10 +8,12 @@ import { useReadingSettings } from './useReadingSettings'
 import { ProfileSettings, ProfileIcon } from './ProfileSettings'
 import { HanziText } from './ToneGuide'
 import { LibraryView } from './LibraryView'
-import { catalogFor, catalogText, type CatalogEntry } from './data/catalog'
+import { catalogFor, catalogText, refreshCatalogCues, type CatalogEntry } from './data/catalog'
 import { StrokePanel } from './StrokePanel'
 import { enrich, runnerStatus } from './runner'
 import { PhraseEditor } from './PhraseEditor'
+import { readingGloss } from './gloss'
+import { spokenPronunciation } from './pronunciation'
 import { groupBreaks } from './practice'
 
 const localReader = ['localhost', '127.0.0.1'].includes(location.hostname)
@@ -37,12 +39,15 @@ export default function App() {
   const modelAbort = useRef<AbortController | null>(null)
   const player = usePlayer(lesson)
   const words = lesson ? flatten(lesson) : [], currentIndex = selected ?? player.index, current = words[currentIndex]
+  const pronunciation = useMemo(() => lesson?.sentences.map(s => spokenPronunciation(s, player.mode, player.grouping)) || [], [lesson, player.mode, player.grouping])
+  const glosses = useMemo(() => lesson?.sentences.map(s => s.words.map(w => readingGloss(w, s.translation))) || [], [lesson])
+  const currentPronunciation = current && pronunciation[current.sentence]?.[current.local]
   let runningOffset = 0
   const sentenceStarts = lesson?.sentences.map(s => { const start = runningOffset; runningOffset += s.words.length; return start }) || []
   const libraryRef = useRef(library); libraryRef.current = library
 
   useEffect(() => {
-    try { setLibrary(loadLibrary()) } catch (e) { setError((e as Error).message) }
+    try { setLibrary(loadLibrary().map(refreshCatalogCues)) } catch (e) { setError((e as Error).message) }
     const w = new Worker(new URL('./dictionary.worker.ts', import.meta.url), { type: 'module' }); worker.current = w
     w.onmessage = ({ data }) => {
       if (data.id !== requestId.current) return
@@ -111,7 +116,7 @@ export default function App() {
       if (file.size > 2_000_000) throw new Error('Choose a text or lesson file smaller than 2 MB.')
       const content = new TextDecoder('utf-8', { fatal: true }).decode(await file.arrayBuffer())
       if (file.name.toLowerCase().endsWith('.json')) {
-        const next = validateLesson(JSON.parse(content)); player.pause(); modelAbort.current?.abort(); ++requestId.current; setBusy(false); setLesson(next); setEditing(false); setSelected(null)
+        const next = refreshCatalogCues(validateLesson(JSON.parse(content))); player.pause(); modelAbort.current?.abort(); ++requestId.current; setBusy(false); setLesson(next); setEditing(false); setSelected(null)
       } else { setText(content); setTitle(file.name.replace(/\.[^.]+$/, '')); prepare(content, file.name.replace(/\.[^.]+$/, '')) }
     } catch (e) { setError(e instanceof Error ? e.message : 'Could not import this file.') }
   }
@@ -158,22 +163,24 @@ export default function App() {
             <div className="flex flex-wrap items-center gap-3"><Button primary onClick={() => { setSelected(null); player.toggle() }} aria-label={player.playing ? 'Pause reading' : 'Play reading'}>{player.playing ? 'Ⅱ Pause' : '▶ Listen'}</Button><Button aria-label="Restart reading" onClick={() => { player.seek(0); setSelected(null) }}>↺ Restart</Button></div><div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted"><span>{player.precision}</span><span>Tap a word to pause and explore · Space to play/pause</span></div>{player.notice && <p role="status" className="mt-2 text-sm text-danger">{player.notice}</p>}
           </div>
           <PhraseEditor lesson={lesson} onChange={next => { player.pause(); setLesson(next) }} />
-          {reading.showPauses && <p className="mt-3 text-sm text-muted">/ marks a repetition pause in Phrase practice. Change reading style and pause duration in Profile.</p>}
+          {reading.showPauses && <p className="mt-3 text-sm text-muted">Wider spaces mark repetition pauses in Phrase practice. Change reading style and pause duration in Profile.</p>}
           <div className="mt-5 grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
             <section aria-label="Chinese passage" className="min-w-0 rounded-2xl border border-line bg-panel px-4 py-5 sm:p-7">
 
               <div className="space-y-8">{lesson.sentences.map((s, si) => <article key={si} className={`rounded-xl border-l-2 pl-3 sm:pl-5 ${current?.sentence === si ? 'border-accent' : 'border-transparent'}`}><div className="mb-3 flex items-center gap-3"><span className="text-xs tabular-nums text-muted">{String(si + 1).padStart(2, '0')}</span><button className="min-h-11 text-xs font-semibold text-accent-deep" onClick={() => { setSelected(null); void player.play(sentenceStarts[si]) }}>Play sentence</button></div>{reading.translationPosition === 'above' && s.translation && <p lang="en" className={`mb-4 ${reading.classFor('translation')}`}>{s.translation}</p>}<div className="flex flex-wrap items-end gap-x-1 gap-y-4" lang="zh-CN">{s.words.map((w, wi) => {
                 const ix = sentenceStarts[si] + wi, isActive = ix === currentIndex
                 const grouped = player.playing && player.mode !== 'word' && ix >= player.group.start && ix < player.group.end
-                const mark = reading.showPauses && groupBreaks(s, player.grouping).includes(w.end) ? <span aria-label="Phrase pause" className="self-center px-1 text-xl font-semibold text-accent-deep">/</span> : null
-                if (!w.pinyin) return <Fragment key={wi}><span className="mb-7 whitespace-pre-wrap text-2xl">{w.text}</span>{mark}</Fragment>
-                return <Fragment key={wi}><button data-practice-group={grouped || undefined} ref={el => { if (isActive) active.current = el }} aria-label={`${w.text}, ${w.pinyin}, ${w.meaning || 'meaning unavailable'}`} aria-pressed={isActive} onClick={() => { player.seek(ix); setSelected(ix) }} className={`flex min-h-20 min-w-11 max-w-full flex-col items-center rounded-xl border px-2 py-2 ${isActive || grouped ? 'border-accent bg-accent-soft text-accent-deep' : 'border-transparent hover:border-line hover:bg-paper-deep'}`}>
-                  {showPinyin && <span className={reading.classFor('pinyin')}>{w.pinyin}</span>}<HanziText text={w.text} pinyin={w.pinyin} tones={showTones} className={reading.classFor('zi')} />{showMeanings && <span lang="en" className={`mt-1 ${reading.classFor('translation')}`}>{w.meaning.split(';')[0] || '—'}</span>}
-                </button>{mark}</Fragment>
+                const spaced = reading.showPauses && groupBreaks(s, player.grouping).includes(w.end)
+                const spoken = pronunciation[si][wi]
+                const tones = reading.spokenTones ? spoken.pinyin : w.pinyin
+                if (!w.pinyin) return <span key={wi} className={`mb-7 whitespace-pre-wrap text-2xl ${spaced ? 'mr-8' : ''}`}>{w.text.replace(/\//g, '　')}</span>
+                return <button key={wi} data-phrase-break={spaced || undefined} data-practice-group={grouped || undefined} ref={el => { if (isActive) active.current = el }} aria-label={`${w.text}, ${w.pinyin}, ${glosses[si][wi]}`} aria-pressed={isActive} onClick={() => { player.seek(ix); setSelected(ix) }} className={`flex min-h-20 min-w-11 flex-col items-center rounded-xl border px-2 py-2 ${spaced ? 'mr-8 max-w-[calc(100%_-_2rem)]' : 'max-w-full'} ${isActive || grouped ? 'border-accent bg-accent-soft text-accent-deep' : 'border-transparent hover:border-line hover:bg-paper-deep'}`}>
+                  {showPinyin && <span className={reading.classFor('pinyin')}>{w.pinyin}</span>}<HanziText text={w.text} pinyin={tones} tones={showTones} className={reading.classFor('zi')} />{showMeanings && <span lang="en" className={`mt-1 ${reading.classFor('translation')}`}>{glosses[si][wi]}</span>}
+                </button>
               })}</div>{reading.translationPosition === 'below' && s.translation && <p lang="en" className={`mt-4 ${reading.classFor('translation')}`}>{s.translation}</p>}</article>)}</div>
               <div className="mt-8 border-t border-line pt-5"><div className="flex flex-wrap gap-3"><Button disabled={modelWorking} onClick={() => void processModel()}>{modelWorking ? 'Processing locally…' : 'Add local-model translations'}</Button>{modelWorking && <Button onClick={() => { modelAbort.current?.abort(); setModelWorking(false); setModelNotice('Cancelled. Your original reading is unchanged.') }}>Cancel</Button>}<Button onClick={() => download(`${lesson.title}.json`, { ...lesson, position: player.index })}>Export lesson</Button></div><p className="mt-3 text-xs leading-5 text-muted">{lesson.source === 'dictionary' ? 'Dictionary meanings shown. Full sentence translation needs your local model or an imported processed lesson.' : lesson.source === 'sample' ? 'Sample sentence translations are included. Pinyin and meanings come from local tools.' : lesson.source === 'library' ? 'English learning translations are included. Word meanings are dictionary suggestions; classical usage can differ.' : 'Contextual annotations generated by your local model.'} Pausing resumes from the selected word.</p>{modelNotice && <p role="status" className="mt-2 text-sm">{modelNotice}</p>}</div>
             </section>
-            <aside role={selected !== null ? 'dialog' : undefined} aria-label="Selected word" className={`space-y-4 xl:sticky xl:top-40 ${selected !== null ? "fixed inset-x-3 bottom-3 z-30 max-h-[48dvh] overflow-y-auto rounded-2xl border border-line-strong bg-paper shadow-lg xl:inset-x-auto xl:bottom-auto xl:z-auto xl:max-h-none xl:overflow-visible xl:border-0 xl:shadow-none" : ""}`}><Card><div className="space-y-4">{selected !== null && <button className="float-right min-h-11 rounded-lg border border-line px-3 text-xs xl:hidden" onClick={() => { setSelected(null); active.current?.scrollIntoView({ block: "center" }) }}>Back to passage</button>}<p className="text-xs font-semibold uppercase tracking-widest text-muted">A word, closer</p>{current && <><div><p className={reading.classFor('pinyin')}>{current.pinyin}</p><p lang="zh-CN"><HanziText text={current.text} pinyin={current.pinyin} tones={showTones} className={reading.classFor('zi')} /></p><p className={`mt-3 ${reading.classFor('translation')}`}>{current.meaning || 'No dictionary entry for this selection.'}</p></div><StrokePanel text={current.text} />{lesson.sentences[current.sentence].translation && <p className={`border-t border-line pt-3 ${reading.classFor('translation')}`}>{lesson.sentences[current.sentence].translation}</p>}<Button primary onClick={() => { setSelected(null); void player.play(currentIndex) }}>Continue from here →</Button></>}</div></Card></aside>
+            <aside role={selected !== null ? 'dialog' : undefined} aria-label="Selected word" className={`space-y-4 xl:sticky xl:top-40 ${selected !== null ? "fixed inset-x-3 bottom-3 z-30 max-h-[48dvh] overflow-y-auto rounded-2xl border border-line-strong bg-paper shadow-lg xl:inset-x-auto xl:bottom-auto xl:z-auto xl:max-h-none xl:overflow-visible xl:border-0 xl:shadow-none" : ""}`}><Card><div className="space-y-4">{selected !== null && <button className="float-right min-h-11 rounded-lg border border-line px-3 text-xs xl:hidden" onClick={() => { setSelected(null); active.current?.scrollIntoView({ block: "center" }) }}>Back to passage</button>}<p className="text-xs font-semibold uppercase tracking-widest text-muted">A word, closer</p>{current && <><div><p className={reading.classFor('pinyin')}>{current.pinyin}</p><p lang="zh-CN"><HanziText text={current.text} pinyin={reading.spokenTones ? currentPronunciation?.pinyin || current.pinyin : current.pinyin} tones={showTones} className={reading.classFor('zi')} /></p>{reading.spokenTones && !!currentPronunciation?.notes.length && <div className="mt-3 text-sm leading-6 text-muted"><p>Spoken guide: <span lang="zh-Latn">{currentPronunciation.pinyin}</span> · dictionary: {current.pinyin}</p>{currentPronunciation.notes.map(note => <p key={note}>{note}</p>)}</div>}<p className={`mt-3 ${reading.classFor('translation')}`}>{current.meaning || 'No dictionary entry for this selection.'}</p></div><StrokePanel text={current.text} />{lesson.sentences[current.sentence].translation && <p className={`border-t border-line pt-3 ${reading.classFor('translation')}`}>{lesson.sentences[current.sentence].translation}</p>}<Button primary onClick={() => { setSelected(null); void player.play(currentIndex) }}>Continue from here →</Button></>}</div></Card></aside>
           </div>
         </>}
       </>}

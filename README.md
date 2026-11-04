@@ -1,6 +1,6 @@
 # Chinese Reader
 
-Read your own Chinese text with pinyin, English word meanings, sentence translations, audio and stroke order together.
+Read your own Chinese text with pinyin, single-word English reading cues, sentence translations, audio and stroke order together. Tap any word for its full contextual or dictionary meaning.
 
 App: https://chinese-reader.freeappstore.online
 
@@ -49,9 +49,15 @@ FAS was selected because the reader is free and its storage/processing are local
 
 ## Playback accuracy and limits
 
-Word mode speaks individual words, with gaps; it is a pronunciation drill. Fluent browser speech uses boundary callbacks. A voice that supplies no word positions produces sentence-level highlighting. Fluent local TTS has sentence-level highlighting until a timed alignment provider is added. No estimated timing is labeled exact. Pause restarts the selected word/remaining phrase; it is not sample-accurate audio pause. A Mandarin browser voice must be installed. Network voices can send text to the OS/browser speech provider.
+Word mode speaks individual words, with gaps; it is a pronunciation drill. Fluent browser speech uses boundary callbacks. A voice that supplies no word positions produces sentence-level highlighting. Fluent local TTS has sentence-level highlighting until a timed alignment provider is added. No estimated timing is labeled exact. Pause restarts the selected word/remaining phrase; it is not sample-accurate audio pause. Device speech is optional; the bundled synthetic Mandarin voice works offline. Network voices can send text to the OS/browser speech provider.
 
 Automatic segmentation and pinyin can still be wrong for names, idioms or polyphonic contexts. Model translation is not certified. The old Kokoro and Qwen isolated-character experiments in Hanzi Practice were not reused as validated narration.
+
+## Compact reading and spoken tones
+
+The passage shows one English cue per word. Full meanings remain in the tap-to-open word inspector. Included texts have contextual corrections; arbitrary pasted text uses dictionary cues until a local model supplies context. The model schema requires a single-word `gloss` separately from the full `meaning`, and old lesson files without `gloss` remain readable. Phrase breaks appear as wider spaces, with shaded editable gaps in the phrase editor.
+
+Profile → Apply spoken tone changes is on by default. Compact contours above Chinese show common third-tone, 一 and 不 changes; dictionary pinyin stays intact, with derived spoken pinyin and rule explanations in the inspector. The [PolyU tone-sandhi reference](https://www.polyu.edu.hk/bepth/introduction-to-phonetics/tones/tone-sandhi/) describes these common changes. Word practice applies changes within a word; connected modes respect phrase boundaries and punctuation. Longer third-tone sequences use suggested word grouping and explicitly indicate that emphasis can change the result. These are teaching guides, not a forced phonetic transcript: the selected TTS engine handles its own pronunciation. Toggle the option off for citation-tone contours.
 
 ## Offline and licenses
 
