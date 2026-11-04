@@ -3,6 +3,7 @@ import { test } from 'node:test'
 import { gunzipSync } from 'node:zlib'
 import { readFileSync } from 'node:fs'
 import { makeLesson, parseDictionary, validateLesson, SAMPLE } from '../web/src/core.ts'
+import { CATALOG, makeCatalogLesson, catalogFor, LEVELS } from '../web/src/data/catalog.ts'
 
 const dictionary = parseDictionary(gunzipSync(readFileSync(new URL('../web/public/dictionary/cedict.bin', import.meta.url))).toString())
 test('actual dictionary annotates simplified, traditional and polyphonic words with exact source offsets', () => {
@@ -33,4 +34,28 @@ test('invalid imports, overwritten source, excess text and missing content are r
   assert.throws(() => makeLesson('中'.repeat(12001), 'A', dictionary), /12,000/)
   assert.throws(() => makeLesson('', 'A', dictionary))
   assert.throws(() => makeLesson('only English', 'A', dictionary), /Chinese/)
+})
+test('all starter texts keep aligned translations, source offsets, labels and curated pronunciation on export/import', () => {
+  assert.equal(CATALOG.length, 18)
+  assert.equal(new Set(CATALOG.map(e => e.id)).size, CATALOG.length)
+  assert.equal(CATALOG.filter(e => e.source).length, 12)
+  assert.deepEqual(new Set(CATALOG.map(e => e.level)), new Set(LEVELS))
+  for (const entry of CATALOG) {
+    const lesson = validateLesson(JSON.parse(JSON.stringify(makeCatalogLesson(entry, dictionary))))
+    assert.equal(lesson.source, 'library')
+    assert.equal(catalogFor(lesson)?.id, entry.id)
+    assert.deepEqual(lesson.tags, entry.tags)
+    entry.lines.forEach(([text, translation, pronunciation], i) => {
+      assert.equal(lesson.sentences[i].text, text)
+      assert.equal(lesson.sentences[i].translation, translation)
+      assert.equal(lesson.sentences[i].words.map(w => w.text).join(''), text)
+      if (pronunciation) assert.equal(lesson.sentences[i].words.filter(w => w.pinyin).map(w => w.pinyin).join(' '), pronunciation)
+    })
+  }
+  const analects = makeCatalogLesson(CATALOG.find(e => e.id === 'analects-learning')!, dictionary)
+  assert.equal(analects.sentences[0].words.find(w => w.text === '說')?.pinyin, 'yuè')
+  assert.match(analects.sentences[0].words.find(w => w.text === '說')?.meaning || '', /pleased/)
+  assert.throws(() => validateLesson({ ...analects, tags: ['x'.repeat(33)] }), /labels/)
+  assert.throws(() => validateLesson({ ...analects, tags: [42] }), /labels/)
+  assert.equal(catalogFor({ ...analects, text: 'Different text' }), undefined)
 })

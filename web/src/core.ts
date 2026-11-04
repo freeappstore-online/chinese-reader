@@ -2,7 +2,7 @@ import { pinyin } from 'pinyin-pro'
 
 export type Word = { text: string; pinyin: string; meaning: string; start: number; end: number }
 export type Sentence = { text: string; translation: string; words: Word[] }
-export type Lesson = { version: 1; id: string; title: string; text: string; sentences: Sentence[]; createdAt: number; position: number; source: 'dictionary' | 'model' | 'sample' }
+export type Lesson = { version: 1; id: string; title: string; text: string; sentences: Sentence[]; createdAt: number; position: number; source: 'dictionary' | 'model' | 'sample' | 'library'; catalogId?: string; tags?: string[]; level?: 'beginner' | 'intermediate' | 'advanced' }
 export type Entry = { pinyin: string; meaning: string }
 export type Dictionary = Map<string, Entry[]>
 export const MAX_TEXT = 12000
@@ -83,7 +83,8 @@ export function validateLesson(value: unknown): Lesson {
     }
   }
   const count = v.sentences.flatMap(s => s.words).length
-  return { ...v, id: typeof v.id === 'string' ? v.id : crypto.randomUUID(), source: ['dictionary', 'sample', 'model'].includes(v.source) ? v.source : 'dictionary', createdAt: Number.isFinite(v.createdAt) ? v.createdAt : Date.now(), position: Number.isInteger(v.position) && v.position >= 0 && v.position < count ? v.position : 0 }
+  if (v.tags !== undefined && (!Array.isArray(v.tags) || v.tags.length > 12 || v.tags.some(t => typeof t !== 'string' || !t.trim() || t.length > 32))) throw new Error('Use up to 12 labels of 32 characters each.')
+  return { ...v, tags: v.tags ? [...new Set(v.tags.map(t => t.trim().toLowerCase()))] : undefined, level: ['beginner', 'intermediate', 'advanced'].includes(v.level || '') ? v.level : undefined, catalogId: typeof v.catalogId === 'string' && /^[a-z0-9-]{1,60}$/.test(v.catalogId) ? v.catalogId : undefined, id: typeof v.id === 'string' ? v.id : crypto.randomUUID(), source: ['dictionary', 'sample', 'model', 'library'].includes(v.source) ? v.source : 'dictionary', createdAt: Number.isFinite(v.createdAt) ? v.createdAt : Date.now(), position: Number.isInteger(v.position) && v.position >= 0 && v.position < count ? v.position : 0 }
 }
 export function flatten(lesson: Lesson) {
   return lesson.sentences.flatMap((s, sentence) => s.words.map((word, local) => ({ ...word, sentence, local })))

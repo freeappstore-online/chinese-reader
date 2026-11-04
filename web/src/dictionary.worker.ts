@@ -1,4 +1,5 @@
 import { makeLesson, parseDictionary, type Dictionary } from './core'
+import { CATALOG, makeCatalogLesson } from './data/catalog'
 let dictionary: Promise<Dictionary> | undefined
 function load() {
   return dictionary ||= (async () => {
@@ -11,6 +12,11 @@ function load() {
   })().catch(e => { dictionary = undefined; throw e })
 }
 self.onmessage = async ({ data }) => {
-  try { self.postMessage({ id: data.id, lesson: makeLesson(data.text, data.title, await load()) }) }
+  try {
+    const entry = data.catalogId ? CATALOG.find(e => e.id === data.catalogId) : undefined
+    if (data.catalogId && !entry) throw new Error('That library text is unavailable.')
+    const dictionary = await load()
+    self.postMessage({ id: data.id, lesson: entry ? makeCatalogLesson(entry, dictionary) : makeLesson(data.text, data.title, dictionary) })
+  }
   catch (e) { self.postMessage({ id: data.id, error: e instanceof Error ? e.message : 'Could not prepare text.' }) }
 }

@@ -38,5 +38,9 @@ try {
   await page.getByRole('button', { name: 'Open my reading' }).click()
   await page.getByLabel('Chinese passage').getByRole('button', { name: /^银行, yín háng,/ }).waitFor()
   await page.screenshot({ path: 'artifacts/offline-reading.png' })
-  console.log('PASS: production PWA reopened offline, restored library, annotated new text; 320px layout fits.')
+  await page.goto(`${base}/library`)
+  await page.getByLabel('Search library', { exact: true }).fill('静夜思')
+  await page.getByRole('article', { name: '静夜思', exact: true }).getByRole('button', { name: 'Read text', exact: true }).click()
+  await page.getByLabel('Chinese passage').getByText('Bright moonlight lies before my bed,', { exact: true }).waitFor()
+  console.log('PASS: production PWA reopened offline, restored library, annotated new text and opened a starter poem with translation; 320px layout fits.')
 } finally { await context?.close(); await rm(profile, { recursive: true, force: true }) }

@@ -14,9 +14,16 @@ App: https://chinese-reader.freeappstore.online
 - A local Ollama companion and standalone CLI, suitable for running on the computer hosting a PAGS runner. It adds English sentence translations and contextual meanings; it does not let model output overwrite dictionary pinyin.
 - Optional already-configured local TTS service with browser-speech fallback.
 - An avatar opens a local Profile containing playback, voice, theme, interface size, separate Chinese/pinyin/translation fonts and sizes, visibility, follow-reading and local-model settings. Preferences persist on this device, without sign-in.
+- Sentence translations default to above the Chinese; Profile can move them below. Escape dismisses the selected-word popup and returns focus to the word, and closes an expanded label editor or the SDK navigation menu.
 - Chinese, blue pinyin and purple translations share the reading size by default. Optional word-wide tone contours use Hanzi Practice’s tone shapes above each syllable; these reflect the written pinyin, not measured speech pitch.
 
 The sample's sentence translations are authored content. Other sentence translations require the local model or an imported processed lesson. Dictionary definitions alone are not presented as fluent sentence translations.
+
+## Starter library
+
+The library includes 18 texts across suggested beginner, intermediate and advanced levels: six original modern practice passages, eight public-domain poems and four classical prose selections. Search by title, author or content; combine level, collection and tag filters. Saved readings support editable tags and levels, preserved in JSON exports. Opening an included text does not overwrite saved readings; saving it creates one reusable copy with progress.
+
+English learning translations are bundled, so no model is needed to start reading. Source and edition notes appear with each classic. The poems and selected classical passages carry explicit Mandarin pinyin for ambiguous readings. These are learning materials, not official HSK ratings or teacher-reviewed translations. See [library notice](web/public/library/NOTICE.txt).
 
 ## Development
 
