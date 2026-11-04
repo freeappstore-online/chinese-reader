@@ -14,12 +14,15 @@ import { enrich, runnerStatus } from './runner'
 import { PhraseEditor } from './PhraseEditor'
 import { readingGloss } from './gloss'
 import { spokenPronunciation } from './pronunciation'
+import { SavedWordsView } from './SavedWordsView'
+import { useSavedWords } from './useSavedWords'
+import { captureWord, contextLesson, savedWordKey, type SavedWord } from './savedWords'
 import { groupBreaks } from './practice'
 
 const localReader = ['localhost', '127.0.0.1'].includes(location.hostname)
 const fas = initApp({ appId: 'chinese-reader' })
 fas.log.destroy() // Reading content stays local; disable background diagnostic uploads.
-const NAV: NavItem[] = [{ label: 'Read', href: '/', title: 'Chinese Reader' }, { label: 'Library', href: '/library', title: 'Library · Chinese Reader' }, { label: 'Profile', href: '/profile', title: 'Profile · Chinese Reader' }]
+const NAV: NavItem[] = [{ label: 'Read', href: '/', title: 'Chinese Reader' }, { label: 'Library', href: '/library', title: 'Library · Chinese Reader' }, { label: 'Saved words', href: '/words', title: 'Saved words · Chinese Reader' }, { label: 'Profile', href: '/profile', title: 'Profile · Chinese Reader' }]
 function Button({ primary, className = '', ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { primary?: boolean }) {
   return <button {...props} className={`min-h-11 rounded-xl border px-4 py-2 text-sm font-semibold disabled:cursor-wait disabled:opacity-50 ${primary ? 'border-accent bg-accent text-paper hover:bg-accent-hover' : 'border-line-strong bg-panel text-ink hover:bg-paper-deep'} ${className}`} />
 }
@@ -31,6 +34,8 @@ export default function App() {
   const [error, setError] = useState(''), [busy, setBusy] = useState(false), [editing, setEditing] = useState(true)
   const [text, setText] = useState(''), [title, setTitle] = useState('')
   const [selected, setSelected] = useState<number | null>(null)
+  const savedWords = useSavedWords()
+  const starred = useMemo(() => new Set(savedWords.words.map(w => w.key)), [savedWords.words])
   const reading = useReadingSettings()
   const { showPinyin, showMeanings, follow, showTones } = reading
   const [modelWorking, setModelWorking] = useState(false), [modelNotice, setModelNotice] = useState('')
@@ -91,6 +96,17 @@ export default function App() {
     player.pause(); setError(''); setBusy(true); modelAbort.current?.abort(); setModelNotice('')
     worker.current?.postMessage({ id: ++requestId.current, text: source, title: name, catalogId })
   }
+  function reviewWord(saved: SavedWord) {
+    player.pause(); modelAbort.current?.abort(); ++requestId.current; setBusy(false)
+    setLesson(contextLesson(saved)); setEditing(false); setSelected(null)
+    player.seek(saved.wordIndex); navigate('/')
+  }
+  function toggleSavedWord() {
+    if (!lesson || !current?.pinyin) return
+    const key = savedWordKey(current)
+    if (starred.has(key)) savedWords.remove(key)
+    else { player.pause(); savedWords.add(captureWord(lesson, current.sentence, current.local)) }
+  }
   function openCatalog(entry: CatalogEntry) {
     setEditing(true); setText(catalogText(entry)); setTitle(entry.title)
     prepare(catalogText(entry), entry.title, entry.id); navigate('/')
@@ -139,7 +155,12 @@ export default function App() {
   return <Shell offlineMessage="Offline · readings and settings save on this device. Download status is in Profile." app={fas} appName="Chinese Reader" nav={NAV} onNavigate={navigate} headerActions={<button type="button" aria-label="Open profile" title="Profile & settings" onClick={() => navigate('/profile')} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-line-strong bg-accent-soft text-accent-deep"><ProfileIcon /></button>}>
     <div className="mx-auto max-w-7xl px-4 py-6 sm:px-8 sm:py-8">
       {error && <div role="alert" className="mb-5 rounded-xl border border-danger bg-danger-soft p-4 text-sm">{error}<button className="ml-4 min-h-11 underline" onClick={() => setError('')}>Dismiss</button></div>}
-      {path === '/profile' || path === '/connection' ? <>
+      {savedWords.error && <div role="alert" className="mb-5 rounded-xl border border-danger bg-danger-soft p-4 text-sm">{savedWords.error}<button className="ml-4 min-h-11 underline" onClick={savedWords.reload}>Retry saved words</button></div>}
+      {savedWords.removed && !starred.has(savedWords.removed.key) && <div role="status" className="mb-5 flex flex-wrap items-center gap-3 rounded-xl border border-line bg-panel p-3 text-sm">Removed {savedWords.removed.sentence.words[savedWords.removed.wordIndex].text} from saved words.<Button onClick={savedWords.undo}>Undo</Button></div>}
+      {path === '/words' ? <>
+        <PageHeader title="Saved words" description="Return to difficult words in the sentences where you found them." />
+        <SavedWordsView saved={savedWords} reading={reading} mode={player.mode} grouping={player.grouping} onReview={reviewWord} />
+      </> : path === '/profile' || path === '/connection' ? <>
         <PageHeader title="Your profile" description="Your reading preferences, saved on this device." actions={<Button onClick={() => navigate('/')}>Back to reading</Button>} />
         <ProfileSettings player={player} reading={reading} localReader={localReader} />
         <h2 className="mt-8 text-2xl font-semibold">Local model & your data</h2>
@@ -174,13 +195,14 @@ export default function App() {
                 const spoken = pronunciation[si][wi]
                 const tones = reading.spokenTones ? spoken.pinyin : w.pinyin
                 if (!w.pinyin) return <span key={wi} className={`mb-7 whitespace-pre-wrap text-2xl ${spaced ? 'mr-8' : ''}`}>{w.text.replace(/\//g, '　')}</span>
-                return <button key={wi} data-phrase-break={spaced || undefined} data-practice-group={grouped || undefined} ref={el => { if (isActive) active.current = el }} aria-label={`${w.text}, ${w.pinyin}, ${glosses[si][wi]}`} aria-pressed={isActive} onClick={() => { player.seek(ix); setSelected(ix) }} className={`flex min-h-20 min-w-11 flex-col items-center rounded-xl border px-2 py-2 ${spaced ? 'mr-8 max-w-[calc(100%_-_2rem)]' : 'max-w-full'} ${isActive || grouped ? 'border-accent bg-accent-soft text-accent-deep' : 'border-transparent hover:border-line hover:bg-paper-deep'}`}>
+                return <button key={wi} data-phrase-break={spaced || undefined} data-practice-group={grouped || undefined} ref={el => { if (isActive) active.current = el }} aria-label={`${w.text}, ${w.pinyin}, ${glosses[si][wi]}${starred.has(savedWordKey(w)) ? ', saved word' : ''}`} aria-pressed={isActive} onClick={() => { player.seek(ix); setSelected(ix) }} className={`relative flex min-h-20 min-w-11 flex-col items-center rounded-xl border px-2 py-2 ${spaced ? 'mr-8 max-w-[calc(100%_-_2rem)]' : 'max-w-full'} ${isActive || grouped ? 'border-accent bg-accent-soft text-accent-deep' : 'border-transparent hover:border-line hover:bg-paper-deep'}`}>
+                  {starred.has(savedWordKey(w)) && <span aria-hidden="true" className="absolute right-1 top-0 text-xs text-accent-deep">★</span>}
                   {showPinyin && <span className={reading.classFor('pinyin')}>{w.pinyin}</span>}<HanziText text={w.text} pinyin={tones} tones={showTones} className={reading.classFor('zi')} />{showMeanings && <span lang="en" className={`mt-1 ${reading.classFor('translation')}`}>{glosses[si][wi]}</span>}
                 </button>
               })}</div>{reading.translationPosition === 'below' && s.translation && <p lang="en" className={`mt-4 ${reading.classFor('translation')}`}>{s.translation}</p>}</article>)}</div>
               <div className="mt-8 border-t border-line pt-5"><div className="flex flex-wrap gap-3"><Button disabled={modelWorking} onClick={() => void processModel()}>{modelWorking ? 'Processing locally…' : 'Add local-model translations'}</Button>{modelWorking && <Button onClick={() => { modelAbort.current?.abort(); setModelWorking(false); setModelNotice('Cancelled. Your original reading is unchanged.') }}>Cancel</Button>}<Button onClick={() => download(`${lesson.title}.json`, { ...lesson, position: player.index })}>Export lesson</Button></div><p className="mt-3 text-xs leading-5 text-muted">{lesson.source === 'dictionary' ? 'Dictionary meanings shown. Full sentence translation needs your local model or an imported processed lesson.' : lesson.source === 'sample' ? 'Sample sentence translations are included. Pinyin and meanings come from local tools.' : lesson.source === 'library' ? 'English learning translations are included. Word meanings are dictionary suggestions; classical usage can differ.' : 'Contextual annotations generated by your local model.'} Pausing resumes from the selected word.</p>{modelNotice && <p role="status" className="mt-2 text-sm">{modelNotice}</p>}</div>
             </section>
-            <aside role={selected !== null ? 'dialog' : undefined} aria-label="Selected word" className={`space-y-4 xl:sticky xl:top-40 ${selected !== null ? "fixed inset-x-3 bottom-3 z-30 max-h-[48dvh] overflow-y-auto rounded-2xl border border-line-strong bg-paper shadow-lg xl:inset-x-auto xl:bottom-auto xl:z-auto xl:max-h-none xl:overflow-visible xl:border-0 xl:shadow-none" : ""}`}><Card><div className="space-y-4">{selected !== null && <button className="float-right min-h-11 rounded-lg border border-line px-3 text-xs xl:hidden" onClick={() => { setSelected(null); active.current?.scrollIntoView({ block: "center" }) }}>Back to passage</button>}<p className="text-xs font-semibold uppercase tracking-widest text-muted">A word, closer</p>{current && <><div><p className={reading.classFor('pinyin')}>{current.pinyin}</p><p lang="zh-CN"><HanziText text={current.text} pinyin={reading.spokenTones ? currentPronunciation?.pinyin || current.pinyin : current.pinyin} tones={showTones} className={reading.classFor('zi')} /></p>{reading.spokenTones && !!currentPronunciation?.notes.length && <div className="mt-3 text-sm leading-6 text-muted"><p>Spoken guide: <span lang="zh-Latn">{currentPronunciation.pinyin}</span> · dictionary: {current.pinyin}</p>{currentPronunciation.notes.map(note => <p key={note}>{note}</p>)}</div>}<p className={`mt-3 ${reading.classFor('translation')}`}>{current.meaning || 'No dictionary entry for this selection.'}</p></div><StrokePanel text={current.text} />{lesson.sentences[current.sentence].translation && <p className={`border-t border-line pt-3 ${reading.classFor('translation')}`}>{lesson.sentences[current.sentence].translation}</p>}<Button primary onClick={() => { setSelected(null); void player.play(currentIndex) }}>Continue from here →</Button></>}</div></Card></aside>
+            <aside role={selected !== null ? 'dialog' : undefined} aria-label="Selected word" className={`space-y-4 xl:sticky xl:top-40 ${selected !== null ? "fixed inset-x-3 bottom-3 z-30 max-h-[48dvh] overflow-y-auto rounded-2xl border border-line-strong bg-paper shadow-lg xl:inset-x-auto xl:bottom-auto xl:z-auto xl:max-h-none xl:overflow-visible xl:border-0 xl:shadow-none" : ""}`}><Card><div className="space-y-4">{selected !== null && <button className="float-right min-h-11 rounded-lg border border-line px-3 text-xs xl:hidden" onClick={() => { setSelected(null); active.current?.scrollIntoView({ block: "center" }) }}>Back to passage</button>}<p className="text-xs font-semibold uppercase tracking-widest text-muted">A word, closer</p>{current && <>{current.pinyin && /\p{Script=Han}/u.test(current.text) && <Button aria-label={starred.has(savedWordKey(current)) ? `Remove ${current.text} from saved words` : `Save ${current.text} to saved words`} aria-pressed={starred.has(savedWordKey(current))} onClick={toggleSavedWord}><span aria-hidden="true">{starred.has(savedWordKey(current)) ? '★' : '☆'}</span> {starred.has(savedWordKey(current)) ? 'Saved word' : 'Save word'}</Button>}<div><p className={reading.classFor('pinyin')}>{current.pinyin}</p><p lang="zh-CN"><HanziText text={current.text} pinyin={reading.spokenTones ? currentPronunciation?.pinyin || current.pinyin : current.pinyin} tones={showTones} className={reading.classFor('zi')} /></p>{reading.spokenTones && !!currentPronunciation?.notes.length && <div className="mt-3 text-sm leading-6 text-muted"><p>Spoken guide: <span lang="zh-Latn">{currentPronunciation.pinyin}</span> · dictionary: {current.pinyin}</p>{currentPronunciation.notes.map(note => <p key={note}>{note}</p>)}</div>}<p className={`mt-3 ${reading.classFor('translation')}`}>{current.meaning || 'No dictionary entry for this selection.'}</p></div><StrokePanel text={current.text} />{lesson.sentences[current.sentence].translation && <p className={`border-t border-line pt-3 ${reading.classFor('translation')}`}>{lesson.sentences[current.sentence].translation}</p>}<Button primary onClick={() => { setSelected(null); void player.play(currentIndex) }}>Continue from here →</Button></>}</div></Card></aside>
           </div>
         </>}
       </>}

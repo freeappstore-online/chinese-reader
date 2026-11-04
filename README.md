@@ -39,6 +39,14 @@ pnpm dlx @freeappstore/cli@latest check
 
 Push main to deploy via the provisioned GitHub Actions pipeline. The platform SDK Shell owns navigation, theme and account UI. No analytics loader; background SDK diagnostic uploads are disabled.
 
+## Saved words
+
+Tap a word, then **☆ Save word**. **Saved words** in the navigation keeps its dictionary pinyin, compact cue, complete meaning and original annotated sentence. Saving a word does not require saving the whole reading. Words with the same text and pronunciation share one entry; different pronunciations stay separate. The first saved context is preserved.
+
+Search by Chinese, accented or unaccented pinyin, meaning or reading title. **Review sentence** opens the original context in the reader with the word selected, ready for playback and stroke practice using your Profile preferences. Remove a star when you are comfortable with the word; Undo restores the last removal.
+
+Saved words live in this browser and work offline. Export/import a saved-words JSON backup from the Saved words screen to transfer them between devices. Imports merge without replacing existing contexts. Storage errors leave the existing list intact and show a failure instead of a false success.
+
 ## Local model and PAGS
 
 See [runner/README.md](runner/README.md) for `pnpm runner` and `pnpm process-reading`.
