@@ -10,7 +10,7 @@ export async function runnerStatus() {
 export async function enrich(lesson: Lesson, signal: AbortSignal) {
   let r: Response
   try { r = await fetch(`${BRIDGE}/analyze`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(lesson), credentials: 'omit', signal }) }
-  catch (e) { if (signal.aborted) throw e; throw new Error('Cannot reach your local model. Open Local model to check the connection, or import a lesson processed on your runner.') }
+  catch (e) { if (signal.aborted) throw e; throw new Error('Cannot reach your local model. Open Profile to check the local-model connection, or import a lesson processed on your runner.') }
   if (!r.ok) throw new Error((await r.json()).error || 'Local text processing failed.')
   const result = validateLesson(await r.json())
   if (result.text !== lesson.text || result.id !== lesson.id) throw new Error('The model returned a different reading.')

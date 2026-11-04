@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { flatten, type Lesson } from './core'
 import { localSpeech } from './runner'
+import { usePreference, isBoolean } from './usePreference'
 
 export function usePlayer(lesson: Lesson | null) {
   const [playing, setPlaying] = useState(false)
   const [index, setIndex] = useState(0)
-  const [rate, setRate] = useState(0.85)
-  const [mode, setMode] = useState<'word' | 'flow'>('word')
+  const [rate, setRate] = usePreference('chinese-reader.rate', 0.85, (v): v is number => typeof v === 'number' && [0.5, 0.7, 0.85, 1, 1.2, 1.5].includes(v))
+  const [mode, setMode] = usePreference<'word' | 'flow'>('chinese-reader.mode', 'word', (v): v is 'word' | 'flow' => v === 'word' || v === 'flow')
   const [wordDelay, setWordDelay] = useState(() => {
     try {
       const saved = localStorage.getItem('chinese-reader-word-delay')
@@ -14,9 +15,9 @@ export function usePlayer(lesson: Lesson | null) {
       return Number.isFinite(value) && value >= 0 && value <= 10 ? value : 1.5
     } catch { return 1.5 }
   })
-  const [repeat, setRepeat] = useState(false)
-  const [preferLocal, setPreferLocal] = useState(false)
-  const [voice, setVoice] = useState('')
+  const [repeat, setRepeat] = usePreference('chinese-reader.repeat', false, isBoolean)
+  const [preferLocal, setPreferLocal] = usePreference('chinese-reader.local-voice', false, isBoolean)
+  const [voice, setVoice] = usePreference('chinese-reader.voice', '', (v): v is string => typeof v === 'string' && v.length < 1000)
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([])
   const [notice, setNotice] = useState('')
   const [precision, setPrecision] = useState('Word practice')

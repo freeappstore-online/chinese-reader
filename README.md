@@ -13,6 +13,8 @@ App: https://chinese-reader.freeappstore.online
 - Browser-only lesson library and saved position. Sign-in does not sync readings. Export before clearing browser data.
 - A local Ollama companion and standalone CLI, suitable for running on the computer hosting a PAGS runner. It adds English sentence translations and contextual meanings; it does not let model output overwrite dictionary pinyin.
 - Optional already-configured local TTS service with browser-speech fallback.
+- An avatar opens a local Profile containing playback, voice, theme, interface size, separate Chinese/pinyin/translation fonts and sizes, visibility, follow-reading and local-model settings. Preferences persist on this device, without sign-in.
+- Chinese, blue pinyin and purple translations share the reading size by default. Optional word-wide tone contours use Hanzi Practice’s tone shapes above each syllable; these reflect the written pinyin, not measured speech pitch.
 
 The sample's sentence translations are authored content. Other sentence translations require the local model or an imported processed lesson. Dictionary definitions alone are not presented as fluent sentence translations.
 
@@ -53,3 +55,5 @@ App code: MIT. Dictionary: unchanged 2026-11-02 CC-CEDICT snapshot from MDBG (12
 ## Validation scope
 
 Tests exercise actual dictionary data, traditional/polyphonic readings, source offsets, corrupted imports, model-result rejection, cancellation and loopback boundary enforcement. Desktop/mobile Chromium workflows use synthetic speech events, real dictionary processing and real stroke SVGs. A real installed Ollama model was also probed separately; pronunciation output was unsuitable, which led to keeping dictionary pinyin authoritative. Physical iPhone/Android playback and pronunciation review remain pending. Synthetic speech tests are not evidence of real device audio quality.
+
+The pinned SDK patch adds a `headerActions` slot so this app can retain the SDK Shell while replacing sign-in and quick settings with its local-profile avatar. Preserve or replace this slot when upgrading the SDK.

@@ -4,6 +4,9 @@
 @source "../../node_modules/@freeappstore/sdk/dist";
 
 @theme inline {
+  --font-hanzi-sans: "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  --font-hanzi-serif: "Songti SC", SimSun, "Noto Serif CJK SC", serif;
+  --font-hanzi-kai: "Kaiti SC", KaiTi, STKaiti, "Noto Serif CJK SC", serif;
   --color-paper: var(--paper);
   --color-paper-deep: var(--paper-deep);
   --color-ink: var(--ink);
@@ -18,6 +21,7 @@
   --color-accent-soft: var(--accent-soft);
   --color-accent-deep: var(--accent-deep);
   --color-accent-hover: var(--accent-hover);
+  --color-reading-translation: var(--reading-translation);
   --color-sky: var(--sky);
   --color-sky-soft: var(--sky-soft);
   --color-sky-deep: var(--sky-deep);
@@ -70,6 +74,7 @@
   --accent: #287358;
   --accent-soft: #e0efe5;
   --accent-deep: #205b46;
+  --reading-translation: #743b91;
   --sky: #4c97b5;
   --sky-soft: #c6e6f2;
   --sky-deep: #245b73;
@@ -123,6 +128,7 @@
   --accent: #7fd5aa;
   --accent-soft: #17382c;
   --accent-deep: #b5ebcd;
+  --reading-translation: #d9aaf1;
   --sky: #89cbe5;
   --sky-soft: #122632;
   --sky-deep: #d3f0fb;
