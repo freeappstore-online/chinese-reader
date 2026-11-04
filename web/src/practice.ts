@@ -25,14 +25,14 @@ export function groupBreaks(sentence: Sentence, grouping: PhraseGrouping) {
   })
   return breaks
 }
-export function practiceUnit(lesson: Lesson, from: number, mode: PracticeMode, grouping: PhraseGrouping) {
-  const words = flatten(lesson), first = words[from], sentence = lesson.sentences[first.sentence]
+export function practiceUnit(lesson: Lesson, from: number, mode: PracticeMode, grouping: PhraseGrouping, words = flatten(lesson)) {
+  const first = words[from], sentence = lesson.sentences[first.sentence]
   let end = from + 1
-  const breaks = groupBreaks(sentence, grouping)
+  const breaks = mode === 'phrase' ? new Set(groupBreaks(sentence, grouping)) : null
   if (mode !== 'word') {
     while (end < words.length && words[end].sentence === first.sentence) {
       const previous = words[end - 1]
-      if (mode === 'phrase' && breaks.includes(previous.end)) break
+      if (breaks?.has(previous.end)) break
       end++
     }
   }

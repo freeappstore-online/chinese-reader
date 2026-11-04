@@ -58,8 +58,13 @@ export function spokenPronunciation(sentence: Sentence, mode: PracticeMode, grou
       }
       start = end
     }
-    for (const word of new Set(group.map(s => s.word))) {
-      const syllables = group.filter(s => s.word === word)
+    const byWord = new Map<number, Syllable[]>()
+    for (const syllable of group) {
+      const bucket = byWord.get(syllable.word)
+      if (bucket) bucket.push(syllable)
+      else byWord.set(syllable.word, [syllable])
+    }
+    for (const [word, syllables] of byWord) {
       result[word] = { pinyin: syllables.map(s => s.surface === s.tone ? s.syllable : retone(s.syllable, s.surface)).join(' '), notes: [...new Set(syllables.flatMap(s => s.notes))] }
     }
     group = []

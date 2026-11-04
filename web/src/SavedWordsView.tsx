@@ -1,3 +1,4 @@
+import { Button } from './Button'
 import { useState } from 'react'
 import { Card, EmptyState, SearchInput } from '@freeappstore/sdk/ui'
 import { download } from './core'
@@ -8,8 +9,6 @@ import { savedWordsFile, type SavedWord } from './savedWords'
 import type { ReadingSettings } from './useReadingSettings'
 import type { useSavedWords } from './useSavedWords'
 import type { PracticeMode, PhraseGrouping } from './practice'
-const button = 'min-h-11 rounded-xl border px-4 py-2 text-sm font-semibold'
-const secondary = `${button} border-line-strong bg-panel`
 const searchable = (text: string) => text.toLocaleLowerCase().normalize('NFD').replace(/\p{M}/gu, '')
 type Props = { saved: ReturnType<typeof useSavedWords>; reading: ReadingSettings; mode: PracticeMode; grouping: PhraseGrouping; onReview: (word: SavedWord) => void }
 export function SavedWordsView({ saved, reading, mode, grouping, onReview }: Props) {
@@ -30,7 +29,7 @@ export function SavedWordsView({ saved, reading, mode, grouping, onReview }: Pro
   return <div className="mt-6 space-y-5">
     <Card><div className="space-y-4">
       <label className="block text-sm font-semibold">Search saved words<SearchInput value={search} onChange={setSearch} placeholder="Chinese, pinyin, meaning, or reading title…" className="mt-2 [&_input]:min-h-11" /></label>
-      <div className="flex flex-wrap items-center gap-3"><p role="status" className="text-sm text-muted">{shown.length} of {saved.words.length} saved {saved.words.length === 1 ? 'word' : 'words'}</p><button className={secondary} disabled={!saved.words.length} onClick={() => download('chinese-reader-saved-words.json', savedWordsFile(saved.words))}>Export saved words</button></div>
+      <div className="flex flex-wrap items-center gap-3"><p role="status" className="text-sm text-muted">{shown.length} of {saved.words.length} saved {saved.words.length === 1 ? 'word' : 'words'}</p><Button disabled={!saved.words.length} onClick={() => download('chinese-reader-saved-words.json', savedWordsFile(saved.words))}>Export saved words</Button></div>
       <details><summary className="min-h-11 cursor-pointer text-sm font-semibold">Restore a saved-words backup</summary><label className="block text-sm">Saved-words backup<input aria-label="Saved-words backup" type="file" accept=".json,application/json" className="mt-2 block w-full min-w-0 text-sm" onChange={e => { void importFile(e.target.files?.[0]); e.target.value = '' }} /></label><p className="mt-2 text-xs text-muted">Merges with your saved words. Existing words keep their original sentence.</p></details>
       {notice && <p role="status" className="text-sm text-muted">{notice}</p>}
       <p className="text-sm text-muted">Saved on this device, available offline. Each word keeps the sentence where you first starred it. Export a backup to move your words to another device.</p>
@@ -51,7 +50,7 @@ export function SavedWordsView({ saved, reading, mode, grouping, onReview }: Pro
         <p lang="zh-CN" className={reading.classFor('zi')}>{item.sentence.text.slice(0, word.start).replace(/\//g, '　')}<mark className="rounded bg-accent-soft text-accent-deep">{word.text}</mark>{item.sentence.text.slice(word.end).replace(/\//g, '　')}</p>
         {reading.translationPosition === 'below' && translation}
         <details><summary className="min-h-11 cursor-pointer text-sm font-semibold">Full meaning</summary><p className={`mt-2 ${reading.classFor('translation')}`}>{word.meaning || 'No dictionary entry for this word.'}</p></details>
-        <div className="flex flex-wrap gap-3"><button className={`${button} border-accent bg-accent text-paper`} onClick={() => onReview(item)}>Review sentence</button><button className={secondary} aria-label={`Remove ${word.text} from saved words`} onClick={() => saved.remove(item.key)}>Remove star</button></div>
+        <div className="flex flex-wrap gap-3"><Button primary onClick={() => onReview(item)}>Review sentence</Button><Button aria-label={`Remove ${word.text} from saved words`} onClick={() => saved.remove(item.key)}>Remove star</Button></div>
       </div></Card></article>
     })}</div>
   </div>

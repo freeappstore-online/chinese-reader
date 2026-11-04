@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { flatten, type Lesson } from './core'
+import { playSpeechAudio } from './speechAudio'
 import { localSpeech } from './runner'
 import { usePreference, isBoolean } from './usePreference'
 import { playOffline, unlockOfflineAudio } from './offlineSpeech'
@@ -9,8 +10,10 @@ const validDelay = (v: unknown): v is number => typeof v === 'number' && [-1, 0,
 export function mandarinVoices() {
   return (window.speechSynthesis?.getVoices() || []).filter(v => /^(zh|cmn)(-|_|$)/i.test(v.lang) && !/[-_](HK|MO|yue|wuu|nan|hak)(-|_|$)/i.test(v.lang)).sort((a, b) => Number(b.localService) - Number(a.localService))
 }
-export function usePlayer(lesson: Lesson | null) {
+export function usePlayer(lesson: Lesson | null, revision = 0) {
   const [playing, setPlaying] = useState(false), [index, setIndex] = useState(0)
+  const [loadedRevision, setLoadedRevision] = useState(-1)
+  const [playbackMode, setPlaybackMode] = useState<PracticeMode>('word')
   const [group, setGroup] = useState({ start: 0, end: 1 })
   const [rate, setRate] = usePreference('chinese-reader.rate', 0.85, (v): v is number => typeof v === 'number' && [0.5, 0.7, 0.85, 1, 1.2, 1.5].includes(v))
   const [mode, setMode] = usePreference<PracticeMode>('chinese-reader.mode', 'word', (v): v is PracticeMode => ['word', 'phrase', 'sentence', 'flow'].includes(v as string))
@@ -28,52 +31,49 @@ export function usePlayer(lesson: Lesson | null) {
   const [notice, setNotice] = useState(''), [precision, setPrecision] = useState(modeLabel[mode])
   const generation = useRef(0), position = useRef(0), running = useRef(false)
   const stopCurrent = useRef<(() => void) | null>(null), abort = useRef<AbortController | null>(null)
-  const audio = useRef<HTMLAudioElement | null>(null), utterance = useRef<SpeechSynthesisUtterance | null>(null)
+  const utterance = useRef<SpeechSynthesisUtterance | null>(null)
   const currentLesson = useRef(lesson); currentLesson.current = lesson
   const move = useCallback((i: number) => { position.current = i; setIndex(i) }, [])
   const pause = useCallback(() => {
     ++generation.current; running.current = false; setPlaying(false)
-    abort.current?.abort(); audio.current?.pause(); stopCurrent.current?.(); stopCurrent.current = null
+    abort.current?.abort(); stopCurrent.current?.(); stopCurrent.current = null
     window.speechSynthesis?.cancel(); utterance.current = null
   }, [])
-  useEffect(() => { pause(); move(lesson?.position || 0); setNotice(''); return pause }, [lesson?.id, pause, move])
+  useEffect(() => { pause(); move(lesson?.position || 0); setNotice(''); setLoadedRevision(revision); return pause }, [lesson?.id, revision, pause, move])
   useEffect(() => {
     if (!window.speechSynthesis) return
     const refresh = () => setVoices(mandarinVoices())
     refresh(); window.speechSynthesis.addEventListener('voiceschanged', refresh)
     return () => window.speechSynthesis.removeEventListener('voiceschanged', refresh)
   }, [])
-  const play = useCallback(async (from = position.current) => {
+  const play = useCallback(async (from = position.current, scope?: 'sentence') => {
     pause(); unlockOfflineAudio()
     const reading = currentLesson.current
     if (!reading) return
     const words = flatten(reading)
     if (!words.length) return
+    from = Math.max(0, Math.min(Number.isInteger(from) ? from : 0, words.length - 1))
+    const activeMode = scope === 'sentence' ? 'sentence' : mode
+    setPlaybackMode(activeMode)
     const run = generation.current, repeatSentence = words[from]?.sentence ?? 0
     running.current = true; setPlaying(true); setNotice('')
     let localFailed = false, browserFailed = false
     try {
       let cursor = from
-      while (cursor < words.length && run === generation.current) {
+      while (cursor < words.length && run === generation.current && (scope !== 'sentence' || words[cursor].sentence === repeatSentence)) {
         if (!isSpoken(words[cursor].text)) { cursor++; continue }
-        const unit = practiceUnit(reading, cursor, mode, grouping), word = words[cursor]
+        const unit = practiceUnit(reading, cursor, activeMode, grouping, words), word = words[cursor]
         move(cursor); setGroup({ start: cursor, end: unit.end })
         const controller = new AbortController(); abort.current = controller
         let spoken = false, duration = 0
-        const label = mode === 'word' ? 'Word starts' : mode === 'phrase' ? 'Phrase' : 'Sentence'
+        const label = activeMode === 'word' ? 'Word starts' : activeMode === 'phrase' ? 'Phrase' : 'Sentence'
         if (preferLocal && voice !== 'offline' && !localFailed && ['localhost', '127.0.0.1'].includes(location.hostname)) {
-          const timer = setTimeout(() => controller.abort(), 20000)
           try {
-            const blob = await localSpeech(unit.text, controller.signal)
+            const blob = await localSpeech(unit.text, AbortSignal.any([controller.signal, AbortSignal.timeout(20000)]))
             if (run !== generation.current) break
-            const url = URL.createObjectURL(blob), sound = new Audio(url); audio.current = sound; sound.playbackRate = rate
             setPrecision(`${label} · local voice`)
-            try { await new Promise<void>((resolve, reject) => {
-              stopCurrent.current = resolve; sound.onended = () => resolve(); sound.onerror = () => reject(new Error('Local audio could not play.'))
-              sound.play().catch(reject)
-            }); spoken = true; duration = sound.duration / rate } finally { sound.pause(); URL.revokeObjectURL(url); audio.current = null }
+            duration = await playSpeechAudio(blob, rate, controller.signal); spoken = true
           } catch { if (run !== generation.current) break; localFailed = true; setNotice('Local voice unavailable. Trying a device or built-in offline voice.') }
-          finally { clearTimeout(timer) }
         }
         if (!spoken && run === generation.current && voice !== 'offline' && !browserFailed) {
           const available = mandarinVoices().filter(v => navigator.onLine || v.localService)
@@ -91,7 +91,7 @@ export function usePlayer(lesson: Lesson | null) {
                 stopCurrent.current = () => { cleanup(); resolve(0) }
                 u.onstart = () => { started = performance.now(); clearTimeout(timer); timer = setTimeout(fail, Math.max(20000, unit.text.length * 2000 / rate)) }
                 u.onboundary = event => {
-                  if (run !== generation.current || mode !== 'flow') return
+                  if (run !== generation.current || activeMode !== 'flow') return
                   const offset = word.start + event.charIndex
                   const found = words.findIndex(w => w.sentence === word.sentence && w.start <= offset && w.end > offset)
                   if (found >= 0) { move(found); setPrecision('Word boundaries · browser voice') }
@@ -109,23 +109,25 @@ export function usePlayer(lesson: Lesson | null) {
           duration = await playOffline(unit.text, rate, offlineController.signal)
         }
         if (run !== generation.current) break
-        const delay = mode === 'word' ? wordDelay : mode === 'phrase' ? phraseDelay : mode === 'sentence' ? sentenceDelay : 0
+        if (scope === 'sentence' && !repeat) break
+        const delay = activeMode === 'word' ? wordDelay : activeMode === 'phrase' ? phraseDelay : activeMode === 'sentence' ? sentenceDelay : 0
         const seconds = delay < 0 ? Math.max(1, (Number.isFinite(duration) ? duration : 1) + 1) : delay
         if (seconds > 0) {
-          setPrecision(`Your turn · repeat the highlighted ${mode === 'word' ? 'word' : mode === 'phrase' ? 'phrase' : 'sentence'}`)
+          setPrecision(`Your turn · repeat the highlighted ${activeMode === 'word' ? 'word' : activeMode === 'phrase' ? 'phrase' : 'sentence'}`)
           await new Promise<void>(resolve => { const timer = setTimeout(resolve, seconds * 1000); stopCurrent.current = () => { clearTimeout(timer); resolve() } })
           if (run !== generation.current) break
         }
         cursor = unit.end
         if (repeat && (cursor >= words.length || words[cursor].sentence > repeatSentence)) cursor = words.findIndex(w => w.sentence === repeatSentence)
       }
-      if (run === generation.current) { running.current = false; setPlaying(false); move(0) }
+      if (run === generation.current) { running.current = false; setPlaying(false); move(scope === 'sentence' ? from : 0) }
     } catch (e) {
       if (run === generation.current) { setNotice(e instanceof Error ? e.message : 'Playback failed.'); running.current = false; setPlaying(false) }
     }
   }, [pause, move, rate, mode, grouping, phraseDelay, sentenceDelay, repeat, voice, preferLocal, wordDelay])
-  function seek(i: number) { pause(); move(i) }
-  function toggle() { if (running.current) pause(); else void play() }
+  function seek(i: number) { pause(); const length = currentLesson.current?.sentences.reduce((n, s) => n + s.words.length, 0) || 0; move(Math.max(0, Math.min(Number.isInteger(i) ? i : 0, Math.max(0, length - 1)))) }
+  function playSentence(from: number) { return play(from, 'sentence') }
+  const toggle = useCallback(() => { if (running.current) pause(); else void play() }, [pause, play])
   function changeRate(v: number) { pause(); setRate(v) }
   function changeMode(v: PracticeMode) { pause(); setMode(v); setPrecision(modeLabel[v]) }
   function changeWordDelay(v: number) {
@@ -133,5 +135,5 @@ export function usePlayer(lesson: Lesson | null) {
     pause(); setWordDelay(v)
     try { localStorage.setItem('chinese-reader-word-delay', String(v)) } catch { /* In-memory playback remains available. */ }
   }
-  return { playing, index, group, rate, mode, grouping, setGrouping, phraseDelay, setPhraseDelay, sentenceDelay, setSentenceDelay, wordDelay, repeat, voice, voices, notice, precision, preferLocal, setPreferLocal, setVoice, setRepeat, pause, play, seek, toggle, changeRate, changeMode, changeWordDelay }
+  return { playing, index, loadedRevision, playbackMode, playSentence, group, rate, mode, grouping, setGrouping, phraseDelay, setPhraseDelay, sentenceDelay, setSentenceDelay, wordDelay, repeat, voice, voices, notice, precision, preferLocal, setPreferLocal, setVoice, setRepeat, pause, play, seek, toggle, changeRate, changeMode, changeWordDelay }
 }

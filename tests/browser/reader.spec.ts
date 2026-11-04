@@ -1,4 +1,5 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
+import { makeLesson } from '../../web/src/core'
 
 declare global { interface Window { spokenWords: string[] } }
 
@@ -346,4 +347,169 @@ test('failed star persistence shows an error without a false saved state', async
   await expect(star).toHaveAttribute('aria-pressed', 'false')
   await expect(page.getByRole('alert')).toContainText('could not save')
   expect(await page.evaluate(() => localStorage.getItem('chinese-reader.saved-words.v1'))).toBeNull()
+})
+
+async function nav(page: Page, name: string) {
+  const menu = page.getByRole('button', { name: 'Menu', exact: true })
+  if (await menu.isVisible()) await menu.click()
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name, exact: true }).click()
+}
+function fixture(id: string, title: string, text = '你好，朋友。', position = 0) {
+  const dict = new Map([['你好', [{ pinyin: 'ni3 hao3', meaning: 'hello' }]], ['朋友', [{ pinyin: 'peng2 you5', meaning: 'friend' }]], ['再见', [{ pinyin: 'zai4 jian4', meaning: 'goodbye' }]]])
+  return { ...makeLesson(text, title, dict), id, position }
+}
+async function seed(page: Page, lessons: ReturnType<typeof fixture>[]) {
+  await page.evaluate(lessons => localStorage.setItem('chinese-reader.library.v1', JSON.stringify(lessons)), lessons)
+  await page.reload(); await nav(page, 'Library')
+}
+
+test('Play sentence speaks only that sentence; Space on a disclosure does not start reading', async ({ page }) => {
+  await page.getByRole('button', { name: 'Try the sample reading' }).click()
+  const summary = page.getByText('Edit this text’s phrase breaks', { exact: true })
+  await summary.focus(); await page.keyboard.press('Space')
+  await expect(summary.locator('..')).toHaveAttribute('open', '')
+  expect(await page.evaluate(() => window.spokenWords)).toEqual([])
+  await page.keyboard.press('Escape')
+  await page.getByLabel('Chinese passage').getByRole('button', { name: 'Play sentence', exact: true }).nth(1).click()
+  await expect.poll(() => page.evaluate(() => window.spokenWords)).toEqual(['我带了一本中文书，坐在窗边慢慢地读。'])
+  await expect(page.getByRole('button', { name: 'Play reading', exact: true })).toBeVisible()
+  expect(await page.evaluate(() => window.spokenWords)).toHaveLength(1)
+  await page.getByRole('button', { name: 'Open profile', exact: true }).click()
+  await expect(page.getByLabel('Reading style', { exact: true })).toHaveValue('word')
+})
+
+test('opening saved readings preserves each position and same-ID replacement resets playback', async ({ page }) => {
+  const a = fixture('position-a', 'Position A', '你好，朋友。', 2), b = fixture('position-b', 'Position B', '再见。')
+  await seed(page, [a, b])
+  await page.getByRole('article', { name: 'Position A', exact: true }).getByRole('button', { name: 'Continue', exact: true }).click()
+  await expect(page.getByLabel('Chinese passage').getByRole('button', { name: /^朋友,/ })).toHaveAttribute('aria-pressed', 'true')
+  await nav(page, 'Library')
+  await page.getByRole('article', { name: 'Position B', exact: true }).getByRole('button', { name: 'Continue', exact: true }).click()
+  await expect(page.getByLabel('Chinese passage').getByRole('button', { name: /^再见,/ })).toHaveAttribute('aria-pressed', 'true')
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('chinese-reader.library.v1')!).find((l: { id: string }) => l.id === 'position-a').position)).toBe(2)
+  await nav(page, 'Library')
+  await page.getByRole('article', { name: 'Position A', exact: true }).getByRole('button', { name: 'Continue', exact: true }).click()
+  await page.getByRole('button', { name: 'New text', exact: true }).click()
+  await page.locator('input[type=file]').setInputFiles({ name: 'replacement.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(fixture('position-a', 'Replacement', '你好。'))) })
+  await page.getByRole('button', { name: 'Play reading', exact: true }).click()
+  await expect.poll(() => page.evaluate(() => window.spokenWords[0])).toBe('你好')
+  await page.getByRole('button', { name: 'Pause reading', exact: true }).click()
+})
+
+test('a late model response cannot replace a newly opened reading', async ({ page }) => {
+  await seed(page, [fixture('model-a', 'Model A'), fixture('model-b', 'Model B', '再见。')])
+  await page.getByRole('article', { name: 'Model A', exact: true }).getByRole('button', { name: 'Continue', exact: true }).click()
+  await page.evaluate(() => {
+    const original = window.fetch
+    window.fetch = (input, init) => String(input).endsWith('/analyze') ? new Promise(resolve => {
+      const lesson = JSON.parse(init!.body as string)
+      lesson.sentences[0].translation = 'LATE MODEL RESPONSE'
+      ;(window as unknown as { finishModel: () => Promise<void> }).finishModel = async () => {
+        resolve(new Response(JSON.stringify(lesson), { status: 200 }))
+        await new Promise(requestAnimationFrame); await new Promise(requestAnimationFrame)
+      }
+    }) : original(input, init)
+  })
+  await page.getByRole('button', { name: 'Add local-model translations' }).click()
+  await expect(page.getByRole('button', { name: 'Processing locally…' })).toBeVisible()
+  await nav(page, 'Library')
+  await page.getByRole('article', { name: 'Model B', exact: true }).getByRole('button', { name: 'Continue', exact: true }).click()
+  await page.evaluate(() => (window as unknown as { finishModel: () => Promise<void> }).finishModel())
+  await expect(page.getByRole('heading', { name: 'Model B', exact: true })).toBeVisible()
+  await expect(page.getByText('LATE MODEL RESPONSE', { exact: true })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Add local-model translations' })).toBeEnabled()
+})
+
+test('a delayed dictionary reply cannot overwrite a saved reading opened meanwhile', async ({ page }) => {
+  await page.addInitScript(() => {
+    const NativeWorker = window.Worker
+    const descriptor = Object.getOwnPropertyDescriptor(NativeWorker.prototype, 'onmessage')!
+    window.Worker = class extends NativeWorker {
+      set onmessage(listener: ((this: Worker, event: MessageEvent) => unknown) | null) {
+        descriptor.set!.call(this, (event: MessageEvent) => {
+          ;(window as unknown as { finishDictionary: () => void }).finishDictionary = () => listener?.call(this, event)
+        })
+      }
+      get onmessage() { return descriptor.get!.call(this) }
+    }
+  })
+  await seed(page, [fixture('kept', 'Keep this reading', '再见。')])
+  await page.getByRole('button', { name: 'New reading', exact: true }).click()
+  await page.getByLabel('Your Chinese text', { exact: true }).fill('你好。')
+  await page.getByRole('button', { name: 'Open my reading →', exact: true }).click()
+  await page.waitForFunction(() => typeof (window as unknown as { finishDictionary: unknown }).finishDictionary === 'function')
+  await nav(page, 'Library')
+  await page.getByRole('article', { name: 'Keep this reading', exact: true }).getByRole('button', { name: 'Continue', exact: true }).click()
+  await page.evaluate(async () => {
+    ;(window as unknown as { finishDictionary: () => void }).finishDictionary()
+    await new Promise(requestAnimationFrame)
+  })
+  await expect(page.getByRole('heading', { name: 'Keep this reading', exact: true })).toBeVisible()
+})
+
+test('library changes in another tab survive saving and progress updates; corrupt storage is not replaced', async ({ page }) => {
+  await seed(page, [fixture('tab-a', 'Tab A')])
+  await page.getByRole('article', { name: 'Tab A', exact: true }).getByRole('button', { name: 'Continue', exact: true }).click()
+  const other = await page.context().newPage()
+  await other.goto('/')
+  await other.evaluate(added => {
+    const latest = JSON.parse(localStorage.getItem('chinese-reader.library.v1')!)
+    localStorage.setItem('chinese-reader.library.v1', JSON.stringify([...latest, added]))
+  }, fixture('tab-b', 'Tab B', '再见。'))
+  await page.getByRole('button', { name: 'Save changes', exact: true }).click()
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('chinese-reader.library.v1')!).map((l: { id: string }) => l.id))).toEqual(['tab-a', 'tab-b'])
+  await other.evaluate(() => {
+    const latest = JSON.parse(localStorage.getItem('chinese-reader.library.v1')!)
+    latest[0].tags = ['other-tab']
+    localStorage.setItem('chinese-reader.library.v1', JSON.stringify(latest))
+  })
+  await page.getByLabel('Chinese passage').getByRole('button', { name: /^朋友,/ }).click()
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('chinese-reader.library.v1')!)[0].position)).toBe(2)
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('chinese-reader.library.v1')!)[0].tags)).toEqual(['other-tab'])
+  await page.keyboard.press('Escape')
+  await other.evaluate(() => localStorage.setItem('chinese-reader.library.v1', '{broken'))
+  await page.getByRole('button', { name: 'Save changes', exact: true }).click()
+  await expect(page.getByRole('alert')).toContainText('could not be read')
+  expect(await page.evaluate(() => localStorage.getItem('chinese-reader.library.v1'))).toBe('{broken')
+  await other.close()
+})
+
+test('a late file read cannot replace a newly opened reading', async ({ page }) => {
+  await seed(page, [fixture('file-b', 'Keep this file context', '再见。')])
+  await page.getByRole('button', { name: 'New reading', exact: true }).click()
+  await page.evaluate(() => {
+    const original = File.prototype.arrayBuffer
+    File.prototype.arrayBuffer = async function () {
+      const bytes = await original.call(this)
+      return this.name === 'slow.json' ? new Promise(resolve => {
+        ;(window as unknown as { finishFile: () => void }).finishFile = () => resolve(bytes)
+      }) : bytes
+    }
+  })
+  await page.locator('input[type=file]').setInputFiles({ name: 'slow.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(fixture('file-a', 'Late file'))) })
+  await page.waitForFunction(() => typeof (window as unknown as { finishFile: unknown }).finishFile === 'function')
+  await nav(page, 'Library')
+  await page.getByRole('article', { name: 'Keep this file context', exact: true }).getByRole('button', { name: 'Continue', exact: true }).click()
+  await page.evaluate(async () => {
+    ;(window as unknown as { finishFile: () => void }).finishFile()
+    await new Promise(requestAnimationFrame); await new Promise(requestAnimationFrame)
+  })
+  await expect(page.getByRole('heading', { name: 'Keep this file context', exact: true })).toBeVisible()
+})
+
+test('sentence playback stays within punctuation-only sentences and uses connected tone guides while speaking', async ({ page }) => {
+  await page.evaluate(() => localStorage.setItem('chinese-reader.show-tones', 'true'))
+  await seed(page, [fixture('sentence-scope', 'Sentence scope', '！\n很好。')])
+  await page.getByRole('article', { name: 'Sentence scope', exact: true }).getByRole('button', { name: 'Continue', exact: true }).click()
+  const sentences = page.getByLabel('Chinese passage').getByRole('button', { name: 'Play sentence', exact: true })
+  await sentences.first().click()
+  expect(await page.evaluate(() => window.spokenWords)).toEqual([])
+  const now = new Date(); await page.clock.install({ time: now }); await page.clock.pauseAt(now)
+  await sentences.nth(1).click()
+  expect(await page.evaluate(() => window.spokenWords)).toEqual(['很好。'])
+  const tone = page.getByLabel('Chinese passage').getByRole('button', { name: /^很,/ }).getByRole('img')
+  await expect(tone).toHaveAttribute('aria-label', 'Tone guide: 2 rising')
+  await page.clock.runFor(300)
+  await expect(page.getByRole('button', { name: 'Play reading', exact: true })).toBeVisible()
+  await expect(tone).toHaveAttribute('aria-label', 'Tone guide: 3 dip then rise')
 })

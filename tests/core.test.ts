@@ -67,3 +67,10 @@ test('all starter texts keep aligned translations, source offsets, labels and cu
   assert.throws(() => validateLesson({ ...analects, tags: [42] }), /labels/)
   assert.equal(catalogFor({ ...analects, text: 'Different text' }), undefined)
 })
+
+test('empty and null-shaped lesson imports fail with useful validation errors', () => {
+  const lesson = makeLesson('你好。', 'A', dictionary)
+  for (const value of [{ ...lesson, text: '', sentences: [] }, { ...lesson, sentences: [null] }, { ...lesson, sentences: [{ ...lesson.sentences[0], words: [null] }] }]) {
+    assert.throws(() => validateLesson(value), error => error instanceof Error && !(error instanceof TypeError) && /lesson|annotations/.test(error.message))
+  }
+})

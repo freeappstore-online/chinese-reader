@@ -77,11 +77,11 @@ export function makeLesson(text: string, title: string, dict: Dictionary, phrase
 export function validateLesson(value: unknown): Lesson {
   if (!value || typeof value !== 'object') throw new Error('Invalid lesson file.')
   const v = value as Lesson
-  if (v.version !== 1 || typeof v.title !== 'string' || v.title.length > 100 || typeof v.text !== 'string' || v.text.length > MAX_TEXT || !Array.isArray(v.sentences) || v.sentences.length > MAX_TEXT) throw new Error('This is not a supported Chinese Reader lesson.')
+  if (v.version !== 1 || typeof v.title !== 'string' || v.title.length > 100 || typeof v.text !== 'string' || !v.text.trim() || v.text.length > MAX_TEXT || !Array.isArray(v.sentences) || v.sentences.length > MAX_TEXT) throw new Error('This is not a supported Chinese Reader lesson.')
   const texts = splitText(v.text)
   if (texts.length !== v.sentences.length) throw new Error('Lesson sentences do not match the original text.')
   for (const [i, s] of v.sentences.entries()) {
-    if (s.text !== texts[i] || typeof s.translation !== 'string' || s.translation.length > 8000 || !Array.isArray(s.words) || s.words.map(w => w.text).join('') !== s.text) throw new Error('Lesson annotations do not match the original text.')
+    if (!s || typeof s !== 'object' || s.text !== texts[i] || typeof s.translation !== 'string' || s.translation.length > 8000 || !Array.isArray(s.words) || s.words.some(w => !w || typeof w !== 'object' || typeof w.text !== 'string') || s.words.map(w => w.text).join('') !== s.text) throw new Error('Lesson annotations do not match the original text.')
     let offset = 0
     for (const w of s.words) {
       if (typeof w.text !== 'string' || !w.text || w.start !== offset || w.end !== offset + w.text.length || typeof w.pinyin !== 'string' || w.pinyin.length > 500 || typeof w.meaning !== 'string' || w.meaning.length > 4000) throw new Error('Invalid word annotation.')

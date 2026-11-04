@@ -45,10 +45,11 @@ export async function analyze(input: unknown, signal: AbortSignal): Promise<Less
     })
     if (!r.ok) throw new Error(`Local model refused processing (HTTP ${r.status}). Check the model is downloaded and running.`)
     const payload = await r.json() as { message?: { content?: string }; done?: boolean }
-    if (payload.done !== true || typeof payload.message?.content !== 'string') throw new Error('The local model returned an incomplete response.')
+    if (!payload || payload.done !== true || typeof payload.message?.content !== 'string') throw new Error('The local model returned an incomplete response.')
     let result: { translation: string; words: { text: string; gloss: string; meaning: string }[] }
     try { result = JSON.parse(payload.message.content) } catch { throw new Error('The local model returned invalid JSON. The original reading is preserved.') }
-    if (!result.translation?.trim() || !Array.isArray(result.words) || result.words.length !== targets.length || result.words.some((w, i) => w.text !== targets[i].text)) throw new Error('The model changed or omitted source words. No annotations were applied.')
+    if (!result || typeof result.translation !== 'string' || !result.translation.trim() || result.translation.length > 8000 || !Array.isArray(result.words) || result.words.length !== targets.length || result.words.some((w, i) => !w || w.text !== targets[i].text)) throw new Error('The model changed or omitted source words. No annotations were applied.')
+    if (result.words.some(w => typeof w.meaning !== 'string' || !w.meaning.trim() || w.meaning.length > 4000)) throw new Error('The model returned an invalid full meaning. No annotations were applied.')
     if (result.words.some(w => !isReadingGloss(w.gloss))) throw new Error('The model must supply one English word per reading gloss. No annotations were applied.')
     let target = 0
     const words = sentence.words.map(w => /\p{Script=Han}/u.test(w.text) ? { ...w, meaning: result.words[target].meaning, gloss: result.words[target++].gloss } : w)

@@ -10,6 +10,8 @@ Free Chinese text reader at https://chinese-reader.freeappstore.online.
 - Keep the SDK Shell, its navigation and PageHeader. Preserve the pnpm SDK `headerActions` and `offlineMessage` patch: the user wants an avatar opening local Profile, with all settings there and no sign-in entry.
 - Reading preferences and independent font/size choices live in `useReadingSettings.ts`; tone guides reuse Hanzi Practice contours.
 - Reader source is `web/src`; runner companion is `runner/`.
+- `useReadingSession` owns async loading and invalidates stale results. Use `openLesson` for replacements so the playback revision resets even when an imported ID is unchanged.
+- `useLibrary` reads the latest stored library before changes; keep progress writes separate from content edits. Shared button variants live in `Button.tsx`.
 - Dictionary and stroke data licenses are separate from MIT; preserve notices.
 - Model processing must preserve source text, token ordering and offsets. Never turn guessed timings into claimed word alignment or substitute cloud AI silently.
 - Model output supplies meanings and translation; dictionary pinyin stays authoritative.
