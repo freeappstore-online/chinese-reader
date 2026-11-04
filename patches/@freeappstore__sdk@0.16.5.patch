@@ -1,18 +1,20 @@
 diff --git a/dist/ui/layout.d.ts b/dist/ui/layout.d.ts
-index 8d9bd8b0aa2b2acc61fd265bef46e5aad5fc2947..5db541dc6ef1274d64be12d16eaa398829736695 100644
+index 8d9bd8b0aa2b2acc61fd265bef46e5aad5fc2947..9df154ec92b575b175c0bb7c4edbd388a6488a44 100644
 --- a/dist/ui/layout.d.ts
 +++ b/dist/ui/layout.d.ts
-@@ -50,6 +50,8 @@ export interface ShellProps {
+@@ -50,6 +50,10 @@ export interface ShellProps {
      renderError?: (ctx: ShellErrorContext) => ReactNode;
      /** Replace the spinner shown while a lazy-loaded screen loads. */
      renderLoading?: () => ReactNode;
 +    /** Optional app-owned account/preferences controls in the topbar. */
 +    headerActions?: ReactNode;
++    /** App-specific offline status for local-first apps. */
++    offlineMessage?: string;
      requireAuth?: boolean;
      showThemeToggle?: boolean;
  }
 diff --git a/dist/ui/layout.js b/dist/ui/layout.js
-index 80198eb3381e360586dd3ee2fc7cc152cdde67b0..fc6b715b5cdc8a1f9f062a9b09159121cbb407d3 100644
+index 80198eb3381e360586dd3ee2fc7cc152cdde67b0..4c853d1cc571a74d08ced3eb0a8afd8e4167a3de 100644
 --- a/dist/ui/layout.js
 +++ b/dist/ui/layout.js
 @@ -106,7 +106,7 @@ function normalizeShellAppName(appName) {
@@ -20,7 +22,7 @@ index 80198eb3381e360586dd3ee2fc7cc152cdde67b0..fc6b715b5cdc8a1f9f062a9b09159121
   * to where the route was left) and moves focus to the new screen's heading.
   */
 -export function Shell({ app, children, appName, nav, renderNav, onNavigate, renderError, renderLoading, requireAuth = false, showThemeToggle = true, }) {
-+export function Shell({ app, children, appName, nav, renderNav, onNavigate, renderError, renderLoading, headerActions, requireAuth = false, showThemeToggle = true, }) {
++export function Shell({ app, children, appName, nav, renderNav, onNavigate, renderError, renderLoading, headerActions, offlineMessage, requireAuth = false, showThemeToggle = true, }) {
      const { user, loading } = useAuth(app);
      const [currentPath, setCurrentPath] = useCurrentPath();
      const mainRef = useRef(null);
@@ -29,6 +31,42 @@ index 80198eb3381e360586dd3ee2fc7cc152cdde67b0..fc6b715b5cdc8a1f9f062a9b09159121
      })) : navigate ? (_jsx(NavBar, { items: navItems, currentPath: currentPath, onNavigate: navigate })) : (_jsx(NavBar, { items: navItems }));
      const loadingNode = renderLoading ? (renderLoading()) : (_jsx("div", { className: "fas-shell-loading flex flex-1 items-center justify-center px-4 py-12", children: _jsx(Spinner, { size: 28 }) }));
 -    return (_jsx(ToastProvider, { children: _jsxs("div", { className: "min-h-[100dvh] flex flex-col pb-[env(safe-area-inset-bottom,0px)]", children: [_jsx(SkipLink, { mainRef: mainRef }), _jsxs("header", { className: "flex items-center justify-between p-[0.5rem_1rem] border-b border-line bg-panel sticky top-0 z-[50]", children: [_jsx("div", { className: "min-w-0", children: appName && (_jsx("span", { className: "block truncate text-[1rem] font-semibold text-ink", children: appName })) }), navNode, _jsxs("div", { className: "flex shrink-0 items-center gap-2", children: [_jsx(TextSizeToggle, {}), showThemeToggle && !user && _jsx(ThemeToggle, {}), user ? (_jsx(ProfileMenu, { app: app, showThemeToggle: showThemeToggle })) : (_jsx(SignInButton, { app: app, label: "Sign in", compactOnMobile: true }))] })] }), _jsx(OfflineBanner, {}), _jsx("main", { id: "main", ref: mainRef, tabIndex: -1, className: "fas-main flex-1 flex flex-col", children: _jsx(ShellErrorBoundary, { app: app, renderError: renderError, resetKey: currentPath, children: _jsx(Suspense, { fallback: loadingNode, children: children }) }) })] }) }));
-+    return (_jsx(ToastProvider, { children: _jsxs("div", { className: "min-h-[100dvh] flex flex-col pb-[env(safe-area-inset-bottom,0px)]", children: [_jsx(SkipLink, { mainRef: mainRef }), _jsxs("header", { className: "flex items-center justify-between p-[0.5rem_1rem] border-b border-line bg-panel sticky top-0 z-[50]", children: [_jsx("div", { className: "min-w-0", children: appName && (_jsx("span", { className: "block truncate text-[1rem] font-semibold text-ink", children: appName })) }), navNode, headerActions ?? _jsxs("div", { className: "flex shrink-0 items-center gap-2", children: [_jsx(TextSizeToggle, {}), showThemeToggle && !user && _jsx(ThemeToggle, {}), user ? (_jsx(ProfileMenu, { app: app, showThemeToggle: showThemeToggle })) : (_jsx(SignInButton, { app: app, label: "Sign in", compactOnMobile: true }))] })] }), _jsx(OfflineBanner, {}), _jsx("main", { id: "main", ref: mainRef, tabIndex: -1, className: "fas-main flex-1 flex flex-col", children: _jsx(ShellErrorBoundary, { app: app, renderError: renderError, resetKey: currentPath, children: _jsx(Suspense, { fallback: loadingNode, children: children }) }) })] }) }));
++    return (_jsx(ToastProvider, { children: _jsxs("div", { className: "min-h-[100dvh] flex flex-col pb-[env(safe-area-inset-bottom,0px)]", children: [_jsx(SkipLink, { mainRef: mainRef }), _jsxs("header", { className: "flex items-center justify-between p-[0.5rem_1rem] border-b border-line bg-panel sticky top-0 z-[50]", children: [_jsx("div", { className: "min-w-0", children: appName && (_jsx("span", { className: "block truncate text-[1rem] font-semibold text-ink", children: appName })) }), navNode, headerActions ?? _jsxs("div", { className: "flex shrink-0 items-center gap-2", children: [_jsx(TextSizeToggle, {}), showThemeToggle && !user && _jsx(ThemeToggle, {}), user ? (_jsx(ProfileMenu, { app: app, showThemeToggle: showThemeToggle })) : (_jsx(SignInButton, { app: app, label: "Sign in", compactOnMobile: true }))] })] }), _jsx(OfflineBanner, { message: offlineMessage }), _jsx("main", { id: "main", ref: mainRef, tabIndex: -1, className: "fas-main flex-1 flex flex-col", children: _jsx(ShellErrorBoundary, { app: app, renderError: renderError, resetKey: currentPath, children: _jsx(Suspense, { fallback: loadingNode, children: children }) }) })] }) }));
  }
  //# sourceMappingURL=layout.js.map
+\ No newline at end of file
+diff --git a/dist/ui/shell-resilience.d.ts b/dist/ui/shell-resilience.d.ts
+index 91f946c8bab9373a7f92afd9f8174255849dedb8..9106648958038e5e811e5df33a5556612e901962 100644
+--- a/dist/ui/shell-resilience.d.ts
++++ b/dist/ui/shell-resilience.d.ts
+@@ -66,7 +66,7 @@ export declare function useOnline(): boolean;
+  * region is always present, so the change is announced. Dismissible; clears
+  * itself on reconnect, and a later drop shows it again.
+  */
+-export declare function OfflineBanner(): import("react").JSX.Element;
++export declare function OfflineBanner({ message }?: { message?: string }): import("react").JSX.Element;
+ /** The first focusable element: hidden until focused, moves focus to the shell's `<main id="main">`. */
+ export declare function SkipLink({ mainRef }: {
+     mainRef: RefObject<HTMLElement | null>;
+diff --git a/dist/ui/shell-resilience.js b/dist/ui/shell-resilience.js
+index d4a6819c7fc8f540646d62ad6a05272eac1937d5..109aa1f8712a2565434461cf5898ceb41dfb63c2 100644
+--- a/dist/ui/shell-resilience.js
++++ b/dist/ui/shell-resilience.js
+@@ -104,7 +104,7 @@ export function useOnline() {
+  * region is always present, so the change is announced. Dismissible; clears
+  * itself on reconnect, and a later drop shows it again.
+  */
+-export function OfflineBanner() {
++export function OfflineBanner({ message } = {}) {
+     const [{ online, dismissed }, setState] = useState(() => ({
+         online: typeof navigator === 'undefined' ? true : navigator.onLine,
+         dismissed: false,
+@@ -125,7 +125,7 @@ export function OfflineBanner() {
+             window.removeEventListener('offline', down);
+         };
+     }, []);
+-    return (_jsx("div", { role: "status", "aria-live": "polite", children: !online && !dismissed && (_jsxs("div", { className: "fas-offline flex items-center justify-between gap-3 border-b border-l-[3px] border-line border-l-warning bg-panel py-1 pl-4 pr-2 text-sm text-ink", children: [_jsx("span", { children: "You're offline. Changes can't be saved until the connection is back." }), _jsx("button", { type: "button", className: "fas-dismiss inline-flex min-h-11 min-w-11 cursor-pointer items-center justify-center rounded-sm border-0 bg-transparent p-0 text-[1.1rem] leading-none text-inherit opacity-75 hover:opacity-100 focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2", "aria-label": "Dismiss offline notice", onClick: () => setState((state) => ({ ...state, dismissed: true })), children: "\u00D7" })] })) }));
++    return (_jsx("div", { role: "status", "aria-live": "polite", children: !online && !dismissed && (_jsxs("div", { className: "fas-offline flex items-center justify-between gap-3 border-b border-l-[3px] border-line border-l-warning bg-panel py-1 pl-4 pr-2 text-sm text-ink", children: [_jsx("span", { children: message ?? "You're offline. Changes can't be saved until the connection is back." }), _jsx("button", { type: "button", className: "fas-dismiss inline-flex min-h-11 min-w-11 cursor-pointer items-center justify-center rounded-sm border-0 bg-transparent p-0 text-[1.1rem] leading-none text-inherit opacity-75 hover:opacity-100 focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2", "aria-label": "Dismiss offline notice", onClick: () => setState((state) => ({ ...state, dismissed: true })), children: "\u00D7" })] })) }));
+ }
+ // ── Skip link ───────────────────────────────────────────────────
+ /** The first focusable element: hidden until focused, moves focus to the shell's `<main id="main">`. */

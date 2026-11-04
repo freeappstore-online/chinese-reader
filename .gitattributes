@@ -1,0 +1,2 @@
+# Preserve the upstream, checksum-pinned generated worker byte for byte.
+web/public/voice/espeak-1-49-1/espeakng.worker.js whitespace=-blank-at-eof

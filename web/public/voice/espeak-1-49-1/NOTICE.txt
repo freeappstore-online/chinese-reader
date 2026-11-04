@@ -1,0 +1,21 @@
+Built-in offline Mandarin voice — eSpeak NG 1.49.1
+
+The unmodified eSpeak NG JavaScript worker and voice data are a separately
+licensed GPL-3.0-or-later component, copyright the eSpeak NG contributors and
+Eitan Isaacson. See LICENSE.txt in this directory. They are not relicensed as MIT.
+The application communicates with the standalone worker through messages.
+
+Pinned distribution:
+https://github.com/steveseguin/espeakng.js/tree/46a04afb1425209f6d6f7e50ac389ae24f41b821
+Original distribution and build provenance:
+https://github.com/pettarin/espeakng.js-cdn
+Corresponding eSpeak NG source, including Emscripten build instructions:
+https://github.com/espeak-ng/espeak-ng/tree/1.49.1
+https://github.com/espeak-ng/espeak-ng/archive/refs/tags/1.49.1.tar.gz
+
+This is a compact formant synthesizer, not a human recording or a neural voice.
+It runs locally and makes no speech-service requests. The Mandarin voice is zh.
+
+Unmodified distribution file SHA-256 values:
+espeakng.worker.js: 27dbae622e8dbd2b4f5def07208db1c557554148b83a99bacba37419031e2e2e
+espeakng.worker.data: a1a5de916d3f3d28babe3a0948d6eab84e793ae69e333974a918a69ddec32a67

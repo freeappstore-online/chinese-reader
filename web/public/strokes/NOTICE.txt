@@ -1,0 +1,12 @@
+Offline stroke diagrams: 9,574 characters from hanzi-writer-data 2.0.1.
+Source: https://registry.npmjs.org/hanzi-writer-data/-/hanzi-writer-data-2.0.1.tgz
+Source archive SHA-256: 72baf3d82b114e60d6e40ea05f24d2262a05cd39d544e2f322ba2fceb7beff15
+Underlying project: https://github.com/skishore/makemeahanzi
+Hanzi Writer data: https://github.com/chanind/hanzi-writer-data
+
+Copyright Arphic Technology Co., Ltd. and Make Me a Hanzi contributors.
+The diagrams retain the Arphic Public License, reproduced at /licenses/ARPHICPL.txt.
+Changes: the individual JSON files are combined into 32 gzip-compressed JSON
+shards by Unicode code point modulo 32. Stroke paths and medians are unchanged.
+Reproduce using scripts/prepare-strokes.py and the pinned source archive.
+Characters outside this dataset have no diagram; they are never fabricated.

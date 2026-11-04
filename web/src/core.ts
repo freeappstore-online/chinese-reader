@@ -1,7 +1,7 @@
 import { pinyin } from 'pinyin-pro'
 
 export type Word = { text: string; pinyin: string; meaning: string; start: number; end: number }
-export type Sentence = { text: string; translation: string; words: Word[] }
+export type Sentence = { text: string; translation: string; words: Word[]; pauseAfter?: number[] }
 export type Lesson = { version: 1; id: string; title: string; text: string; sentences: Sentence[]; createdAt: number; position: number; source: 'dictionary' | 'model' | 'sample' | 'library'; catalogId?: string; tags?: string[]; level?: 'beginner' | 'intermediate' | 'advanced' }
 export type Entry = { pinyin: string; meaning: string }
 export type Dictionary = Map<string, Entry[]>
@@ -34,26 +34,31 @@ export function parseDictionary(text: string): Dictionary {
 export function splitText(text: string): string[] {
   return text.match(/[^。！？!?\n]+[。！？!?]*|[。！？!?]+/gu)?.map(s => s.trim()).filter(Boolean) || []
 }
-export function makeLesson(text: string, title: string, dict: Dictionary): Lesson {
+export function makeLesson(text: string, title: string, dict: Dictionary, phraseBoundaries: number[][] = []): Lesson {
   text = text.trim()
   if (!text || text.length > MAX_TEXT) throw new Error(`Enter between 1 and ${MAX_TEXT.toLocaleString()} characters.`)
   if (!/\p{Script=Han}/u.test(text)) throw new Error('Add some Chinese text to read.')
-  const sentences = splitText(text).map(sentence => {
+  const sentences = splitText(text).map((sentence, si) => {
     const contextual = pinyin(sentence, { type: 'all' })
+    const boundaries = [...new Intl.Segmenter('zh', { granularity: 'word' }).segment(sentence)].map(part => part.index + part.segment.length)
     const words: Word[] = []
-    // Longest dictionary match preserves source characters, punctuation and offsets.
+    // Avoid a dictionary match that crosses into only part of the next natural word.
     let start = 0
     while (start < sentence.length) {
-      const tail = sentence.slice(start)
+      // An authored phrase boundary also prevents accidental dictionary matches across it.
+      const boundary = phraseBoundaries[si]?.find(end => end > start) ?? sentence.length
+      const naturalEnd = boundaries.find(end => end > start) ?? sentence.length
+      const tail = sentence.slice(start, boundary)
       const nonHan = tail.match(/^[^\p{Script=Han}]+/u)
       let chunk = nonHan?.[0] || String.fromCodePoint(sentence.codePointAt(start)!)
-      if (!nonHan) for (let len = Math.min(12, tail.length); len > chunk.length; len--) {
-        if (dict.has(tail.slice(0, len))) { chunk = tail.slice(0, len); break }
+      const countedPerson = tail.startsWith('个人') && /[\d一二三四五六七八九十百千万两几]$/u.test(sentence.slice(0, start))
+      if (!nonHan && !countedPerson) for (let len = Math.min(12, tail.length); len > chunk.length; len--) {
+        if ((start + len <= naturalEnd || boundaries.includes(start + len)) && dict.has(tail.slice(0, len))) { chunk = tail.slice(0, len); break }
       }
       const entries = dict.get(chunk)
       const charStart = [...sentence.slice(0, start)].length
       let pronunciation = /\p{Script=Han}/u.test(chunk) ? contextual.slice(charStart, charStart + [...chunk].length).map(c => c.pinyin).join(' ') : ''
-      const ranked = entries?.slice().sort((a, b) => Number(/^(surname |Taiwan pr\.|old variant|variant of|abbr\.)/i.test(a.meaning)) - Number(/^(surname |Taiwan pr\.|old variant|variant of|abbr\.)/i.test(b.meaning)))
+      const ranked = entries?.slice().sort((a, b) => Number(/^(surname |Taiwan pr\.|old variant|variant of|abbr\.|used in )/i.test(a.meaning)) - Number(/^(surname |Taiwan pr\.|old variant|variant of|abbr\.|used in )/i.test(b.meaning)))
       const matching = ranked?.find(e => toneMarks(e.pinyin).toLowerCase() === pronunciation.toLowerCase())
       const useful = matching || ranked?.[0]
       // Traditional phrases can be absent from the pinyin library; the exact dictionary entry is authoritative.
@@ -81,6 +86,7 @@ export function validateLesson(value: unknown): Lesson {
       if (/\p{Script=Han}/u.test(w.pinyin)) throw new Error('Pinyin must contain pronunciation, not Chinese characters.')
       offset = w.end
     }
+    if (s.pauseAfter !== undefined && (!Array.isArray(s.pauseAfter) || s.pauseAfter.length > s.words.length || s.pauseAfter.some((end, j) => !Number.isInteger(end) || end <= 0 || end >= s.text.length || !s.words.some(w => w.end === end) || (j > 0 && end <= s.pauseAfter![j - 1])))) throw new Error('Phrase breaks must be ordered word boundaries inside the sentence.')
   }
   const count = v.sentences.flatMap(s => s.words).length
   if (v.tags !== undefined && (!Array.isArray(v.tags) || v.tags.length > 12 || v.tags.some(t => typeof t !== 'string' || !t.trim() || t.length > 32))) throw new Error('Use up to 12 labels of 32 characters each.')

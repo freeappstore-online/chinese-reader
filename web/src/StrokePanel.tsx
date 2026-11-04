@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import HanziWriter from 'hanzi-writer'
+import { loadStrokes } from './strokes'
 
 export function StrokePanel({ text }: { text: string }) {
   const characters = [...text].filter(c => /\p{Script=Han}/u.test(c))
@@ -10,7 +11,6 @@ export function StrokePanel({ text }: { text: string }) {
   useEffect(() => {
     if (!target.current || !char) return
     let alive = true
-    const controller = new AbortController()
     target.current.replaceChildren(); setError('')
     const colors = getComputedStyle(document.documentElement)
     const color = (name: string) => {
@@ -23,18 +23,13 @@ export function StrokePanel({ text }: { text: string }) {
       width: 160, height: 160, padding: 12, showOutline: true, strokeAnimationSpeed: 1,
       strokeColor: color('--ink'), radicalColor: color('--accent'), outlineColor: color('--line-strong'),
       charDataLoader: (c, success, failure) => {
-        // Bundled common characters first; other characters use the pinned public dataset.
-        fetch(`/characters/${encodeURIComponent(c)}.json`, { signal: controller.signal }).then(async r => {
-          if (!r.ok || !r.headers.get('content-type')?.includes('json')) r = await fetch(`https://cdn.jsdelivr.net/npm/hanzi-writer-data@2.0.1/${encodeURIComponent(c)}.json`, { signal: controller.signal, credentials: 'omit' })
-          if (!r.ok) throw new Error('Unavailable')
-          const data = await r.json()
-          if (!Array.isArray(data.strokes)) throw new Error('Unavailable')
+        loadStrokes(c).then(data => {
           if (alive) success(data)
-        }).catch(() => { if (alive) { setError('Stroke data unavailable for this character. Reconnect to load it.'); failure() } })
+        }).catch(() => { if (alive) { setError('This character is missing from the stroke pack, or the offline download is incomplete. Check Offline readiness in Profile.'); failure() } })
       },
     })
     writer.current = w
-    return () => { alive = false; controller.abort(); w.pauseAnimation(); w.cancelQuiz(); target.current?.replaceChildren() }
+    return () => { alive = false; w.pauseAnimation(); w.cancelQuiz(); target.current?.replaceChildren() }
   }, [char])
   if (!char) return <p className="text-sm text-muted">Select a Chinese word to explore its characters.</p>
   return <div className="space-y-3">

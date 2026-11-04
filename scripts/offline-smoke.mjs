@@ -1,4 +1,4 @@
-import { chromium } from '@playwright/test'
+import { chromium, expect } from '@playwright/test'
 import { mkdtemp, mkdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -6,14 +6,18 @@ import assert from 'node:assert/strict'
 
 const profile = await mkdtemp(join(tmpdir(), 'chinese-reader-offline-'))
 const base = process.env.READER_URL || 'http://127.0.0.1:5180'
-let context
+let context, page
 try {
   await mkdir('artifacts', { recursive: true })
   context = await chromium.launchPersistentContext(profile, { headless: true, viewport: { width: 390, height: 844 } })
-  let page = await context.newPage()
+  page = await context.newPage()
+  page.on('pageerror', error => console.log('Page error:', error.message))
   await page.goto(base)
   await page.evaluate(async () => { await navigator.serviceWorker.ready })
   await page.reload()
+  await page.getByRole('button', { name: 'Open profile', exact: true }).click()
+  await expect(page.getByRole('status').filter({ hasText: 'Ready offline' })).toBeVisible({ timeout: 90000 })
+  await page.getByRole('button', { name: 'Back to reading', exact: true }).click()
   await page.getByRole('button', { name: 'Try the sample reading' }).click()
   await page.getByRole('button', { name: 'Save reading', exact: true }).click()
   await page.getByLabel('Chinese passage').getByRole('button', { name: /^下午,/ }).click()
@@ -28,7 +32,18 @@ try {
   await page.screenshot({ path: 'artifacts/mobile-dark.png' })
   await context.close()
   context = await chromium.launchPersistentContext(profile, { headless: true, viewport: { width: 390, height: 844 }, offline: true })
+  await context.addInitScript(() => {
+    Object.defineProperty(window, 'speechSynthesis', { configurable: true, value: undefined })
+    window.offlineStarts = []
+    const original = AudioBufferSourceNode.prototype.start
+    AudioBufferSourceNode.prototype.start = function (...args) {
+      const data = this.buffer.getChannelData(0)
+      window.offlineStarts.push({ duration: this.buffer.duration, peak: data.reduce((peak, sample) => Math.max(peak, Math.abs(sample)), 0) })
+      return original.apply(this, args)
+    }
+  })
   page = await context.newPage()
+  page.on('pageerror', error => console.log('Page error:', error.message))
   await page.goto(`${base}/library`)
   await page.getByRole('heading', { name: 'An afternoon at the café' }).waitFor()
   await page.getByRole('button', { name: 'Continue', exact: true }).click()
@@ -37,10 +52,42 @@ try {
   await page.getByLabel('Your Chinese text', { exact: true }).fill('今天我去银行。')
   await page.getByRole('button', { name: 'Open my reading' }).click()
   await page.getByLabel('Chinese passage').getByRole('button', { name: /^银行, yín háng,/ }).waitFor()
+  await page.getByRole('button', { name: 'Save reading', exact: true }).click()
   await page.screenshot({ path: 'artifacts/offline-reading.png' })
   await page.goto(`${base}/library`)
+  await page.getByRole('heading', { name: 'Fresh offline text', exact: true }).waitFor()
+  await expect(page.getByText("Changes can't be saved", { exact: false })).toHaveCount(0)
   await page.getByLabel('Search library', { exact: true }).fill('静夜思')
   await page.getByRole('article', { name: '静夜思', exact: true }).getByRole('button', { name: 'Read text', exact: true }).click()
   await page.getByLabel('Chinese passage').getByText('Bright moonlight lies before my bed,', { exact: true }).waitFor()
-  console.log('PASS: production PWA reopened offline, restored library, annotated new text and opened a starter poem with translation; 320px layout fits.')
-} finally { await context?.close(); await rm(profile, { recursive: true, force: true }) }
+  await page.getByRole('button', { name: 'Play reading', exact: true }).click()
+  await expect.poll(() => page.evaluate(() => window.offlineStarts.length), { timeout: 20000 }).toBeGreaterThan(0)
+  const audio = await page.evaluate(() => window.offlineStarts[0])
+  assert.ok(audio.duration > .1 && audio.peak > .01)
+  await page.getByText('Your turn · repeat the highlighted word', { exact: true }).waitFor()
+  await page.getByRole('button', { name: 'Pause reading', exact: true }).click()
+  const starts = await page.evaluate(() => window.offlineStarts.length)
+  await page.waitForTimeout(2000)
+  assert.equal(await page.evaluate(() => window.offlineStarts.length), starts)
+  await page.getByRole('button', { name: 'New text', exact: true }).click()
+  await page.getByLabel('Your Chinese text', { exact: true }).fill('龍。')
+  await page.getByRole('button', { name: 'Open my reading' }).click()
+  await page.getByLabel('Chinese passage').getByRole('button', { name: /^龍,/ }).click()
+  await page.getByLabel('Selected word').locator('svg path').first().waitFor({ state: 'attached' })
+  await page.getByRole('button', { name: 'Open profile', exact: true }).click()
+  await expect(page.getByRole('status').filter({ hasText: 'Ready offline' })).toBeVisible()
+  const removed = await page.evaluate(async () => {
+    for (const name of await caches.keys()) {
+      const cache = await caches.open(name)
+      for (const key of await cache.keys()) if (new URL(key.url).pathname.endsWith('/espeakng.worker.data')) return cache.delete(key)
+    }
+    return false
+  })
+  assert.equal(removed, true)
+  await page.getByRole('button', { name: 'Check download & keep offline', exact: true }).click()
+  await expect(page.getByRole('status').filter({ hasText: 'Downloading offline files' })).toBeVisible()
+  await context.setOffline(false)
+  await page.getByRole('button', { name: 'Check download & keep offline', exact: true }).click()
+  await expect(page.getByRole('status').filter({ hasText: 'Ready offline' })).toBeVisible({ timeout: 20000 })
+  console.log('PASS: offline cold restart, dictionary, library translations, real built-in speech with no browser voice, pause cancellation, uncommon stroke data, readiness and 320px layout.')
+} catch (error) { await page?.screenshot({ path: 'artifacts/offline-failure.png' }); console.log((await page?.locator('body').innerText())?.slice(0, 3000)); throw error } finally { await context?.close(); await rm(profile, { recursive: true, force: true }) }

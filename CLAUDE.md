@@ -7,7 +7,7 @@ Free Chinese text reader at https://chinese-reader.freeappstore.online.
 - Work on main; push main to deploy through existing GitHub Actions.
 - Platform SKILLS.md: https://freeappstore.online/skills.md.
 - Compatibility pointer: https://raw.githubusercontent.com/freeappstore-online/freeappstore/main/SKILLS.md
-- Keep the SDK Shell, its navigation and PageHeader. Preserve the pnpm SDK `headerActions` patch: the user wants an avatar opening local Profile, with all settings there and no sign-in entry.
+- Keep the SDK Shell, its navigation and PageHeader. Preserve the pnpm SDK `headerActions` and `offlineMessage` patch: the user wants an avatar opening local Profile, with all settings there and no sign-in entry.
 - Reading preferences and independent font/size choices live in `useReadingSettings.ts`; tone guides reuse Hanzi Practice contours.
 - Reader source is `web/src`; runner companion is `runner/`.
 - Dictionary and stroke data licenses are separate from MIT; preserve notices.

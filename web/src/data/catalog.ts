@@ -1,9 +1,13 @@
 import { makeLesson, type Dictionary, type Lesson } from '../core'
+import { BEGINNER_TEXTS } from './beginner'
+import { phraseOffsets } from '../practice'
+import { suggestedPhrases } from './phrases'
 export const LEVELS = ['beginner', 'intermediate', 'advanced'] as const
 export type Level = typeof LEVELS[number]
-export type CatalogEntry = { id: string; title: string; english: string; author: string; level: Level; tags: string[]; description: string; source?: string; note?: string; glosses?: Record<string, string>; lines: [string, string, string?][] }
+export type CatalogEntry = { id: string; title: string; english: string; author: string; level: Level; tags: string[]; description: string; source?: string; note?: string; glosses?: Record<string, string>; lines: [string, string, string?, string?][] }
 const ws = (title: string) => `https://zh.wikisource.org/zh-hans/${encodeURIComponent(title)}`
 export const CATALOG: CatalogEntry[] = [
+  ...BEGINNER_TEXTS,
   { id: 'introductions', title: '认识新朋友', english: 'Meeting a new friend', author: 'Chinese Reader · original practice', level: 'beginner', tags: ['textbook-style', 'daily life', 'introductions', 'modern chinese'], description: 'Short sentences about names, home, and learning Chinese.', lines: [
     ['你好，我叫小林。', 'Hello, my name is Xiaolin.'], ['我住在一个小城市。', 'I live in a small city.'], ['我每天学习中文。', 'I study Chinese every day.'], ['我的朋友也喜欢中文。', 'My friend also likes Chinese.'], ['我们一起读书，一起说中文。', 'We read and speak Chinese together.'], ['认识你，我很高兴。', 'I am happy to meet you.'],
   ] },
@@ -61,12 +65,18 @@ export const CATALOG: CatalogEntry[] = [
 ]
 export const catalogText = (entry: CatalogEntry) => entry.lines.map(([text]) => text).join('\n')
 export function makeCatalogLesson(entry: CatalogEntry, dictionary: Dictionary): Lesson {
-  const lesson = makeLesson(catalogText(entry), entry.title, dictionary)
+  const boundaries = entry.lines.map(([text, , , marked]) => phraseOffsets(marked || suggestedPhrases.get(text) || text).offsets)
+  const lesson = makeLesson(catalogText(entry), entry.title, dictionary, boundaries)
   if (lesson.sentences.length !== entry.lines.length) throw new Error('Library text and translation lines do not match.')
   lesson.sentences.forEach((sentence, i) => {
-    const [text, translation, pronunciation] = entry.lines[i]
+    const [text, translation, pronunciation, marked] = entry.lines[i]
     if (sentence.text !== text) throw new Error('Library sentence does not match its source.')
     sentence.translation = translation
+    if (marked || suggestedPhrases.has(text)) {
+      const phrases = phraseOffsets(marked || suggestedPhrases.get(text)!)
+      if (phrases.text !== text) throw new Error('Phrase marks must preserve the original text.')
+      sentence.pauseAfter = phrases.offsets
+    }
     sentence.words.forEach(word => { if (entry.glosses?.[word.text]) word.meaning = entry.glosses[word.text] })
     if (pronunciation) {
       const syllables = pronunciation.split(' ')

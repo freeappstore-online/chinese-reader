@@ -24,6 +24,14 @@ test('unprocessed text never fabricates a sentence translation', () => {
   assert.ok(lesson.sentences[0].words.some(w => w.meaning))
   assert.ok(makeLesson(SAMPLE, 'Sample', dictionary).sentences.every(s => s.translation))
 })
+test('beginner annotations prefer useful definitions and do not join words across a time expression', () => {
+  const family = makeLesson('我家有四个人。', 'Family', dictionary)
+  assert.match(family.sentences[0].words.find(w => w.text === '家')!.meaning, /^home/)
+  assert.ok(!family.sentences[0].words.some(w => w.text === '个人'))
+  const meeting = makeLesson('下午三点见面，好吗？', 'Meet', dictionary)
+  assert.ok(!meeting.sentences[0].words.some(w => w.text === '点见'))
+  assert.ok(meeting.sentences[0].words.some(w => w.text === '见面'))
+})
 test('invalid imports, overwritten source, excess text and missing content are rejected', () => {
   const lesson = makeLesson('你好。', 'A', dictionary)
   const bad = structuredClone(lesson); bad.sentences[0].words[0].text = '再见'
@@ -36,9 +44,9 @@ test('invalid imports, overwritten source, excess text and missing content are r
   assert.throws(() => makeLesson('only English', 'A', dictionary), /Chinese/)
 })
 test('all starter texts keep aligned translations, source offsets, labels and curated pronunciation on export/import', () => {
-  assert.equal(CATALOG.length, 18)
+  assert.equal(CATALOG.length, 34)
   assert.equal(new Set(CATALOG.map(e => e.id)).size, CATALOG.length)
-  assert.equal(CATALOG.filter(e => e.source).length, 12)
+  assert.equal(CATALOG.filter(e => e.source).length, 16)
   assert.deepEqual(new Set(CATALOG.map(e => e.level)), new Set(LEVELS))
   for (const entry of CATALOG) {
     const lesson = validateLesson(JSON.parse(JSON.stringify(makeCatalogLesson(entry, dictionary))))
